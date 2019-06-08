@@ -7,9 +7,32 @@
 #include <vector>
 #include <cstring>
 #include <cassert>
+#include <functional>
 
 namespace mpi
 {
+
+// template <class T, class Result>
+// auto make_op(const std::function<Result(T, T)>& _operation, const bool _commute = false) -> std::unique_ptr<MPI_Op>
+// {
+
+// }
+// template <class T, class Result>
+// auto make_op(const std::function<std::vector<Result>(std::vector<T>, std::vector<T>)>& _operation, const bool _commute = false) -> std::unique_ptr<MPI_Op>
+// {
+
+// }
+// template <class T, class Result>
+// auto make_op(const std::function<void(void *, void *, int *, MPI_Datatype *)>& _operation, const bool _commute = false) -> std::unique_ptr<MPI_Op>
+// {
+//     //create empty operation
+//     auto _new_operation = std::make_unique<MPI_Op>();
+//     //register user function
+//     MPI_Op_create(&_operation, _commute, _new_operation.get());
+//     //return wirh deleter
+//     return std::unique_ptr<MPI_Op, std::function<void(MPI_Op*)>>(_new_operation.release(), [](auto _operation){ MPI_Op_free(_operation);});
+// }
+
 auto processor_name() -> std::string
 {
     auto name = std::array<char, MPI_MAX_PROCESSOR_NAME>{};
@@ -54,6 +77,15 @@ private:
 public:
     communicator(MPI_Comm _comm) : _comm(_comm) {}
 
+    auto operator==(const communicator &rhs) -> bool
+    {
+        return _comm == rhs._comm;
+    }
+    auto operator!=(const communicator &rhs) -> bool
+    {
+        return !(*this == rhs);
+    }
+
     auto size() -> int
     {
         auto _size = int{};
@@ -67,6 +99,14 @@ public:
         //add error checking
         MPI_Comm_rank(_comm, &_rank);
         return _rank;
+    }
+    auto name() -> std::string
+    {
+        auto _name = std::make_unique<char[]>(MPI_MAX_OBJECT_NAME);
+        auto _size = MPI_MAX_OBJECT_NAME;
+        //add error checking
+        MPI_Comm_get_name(_comm, _name.get(), &_size);
+        return std::string{_name.get()};
     }
 
     auto dest(int _dest) -> std::unique_ptr<sender>
@@ -290,6 +330,15 @@ private:
 public:
     receiver(int _source, int _tag, MPI_Comm _comm) : _source(_source), _tag(_tag), _comm(_comm) {}
 
+    auto operator==(const receiver &rhs) -> bool
+    {
+        return _source == rhs._source && _tag == rhs._tag && _comm == rhs._comm;
+    }
+    auto operator!=(const receiver &rhs) -> bool
+    {
+        return !(*this == rhs);
+    }
+
     template <class T>
     auto recv() -> T
     {
@@ -344,6 +393,15 @@ private:
 
 public:
     sender(int _dest, int _tag, MPI_Comm _comm) : _dest(_dest), _tag(_tag), _comm(_comm) {}
+
+    auto operator==(const sender &rhs) -> bool
+    {
+        return _dest == rhs._dest && _tag == rhs._tag && _comm == rhs._comm;
+    }
+    auto operator!=(const sender &rhs) -> bool
+    {
+        return !(*this == rhs);
+    }
 
     template <class T>
     auto send(const T _value) -> void

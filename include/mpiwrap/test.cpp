@@ -1,18 +1,20 @@
 #include "mpiwrap.h"
 
 //goal 1
-// int main(int argc, char **argv)
-// {
-//     mpi::mpi init{argc, argv};
+int main(int argc, char **argv)
+{
+    mpi::mpi init{argc, argv};
 
-//     auto world_size = mpi::comm("world")->size();
-//     auto world_rank = mpi::comm("world")->rank();
+    auto world_size = mpi::comm("world")->size();
+    auto world_rank = mpi::comm("world")->rank();
+    auto name = mpi::comm("world")->name();
 
-//     auto processor_name = mpi::processor_name();
-//     std::cout << "Hello world from processor " << processor_name << ", rank " << world_rank << " out of " << world_size << " processors\n";
+    auto processor_name = mpi::processor_name();
+    std::cout << "Hello world from processor " << processor_name << ", rank " << world_rank << " out of " << world_size << " processors,\n"
+              << "with comm " << name << '\n';
 
-//     return 0;
-// }
+    return 0;
+}
 
 //goal 2
 // int main(int argc, char **argv)
@@ -164,51 +166,51 @@
 // }
 
 //goal 6
-int main(int argc, char **argv)
-{
-    mpi::mpi init{argc, argv};
+// int main(int argc, char **argv)
+// {
+//     mpi::mpi init{argc, argv};
 
-    auto rank = mpi::comm("world")->rank();
+//     auto rank = mpi::comm("world")->rank();
 
-    auto number = mpi::comm("world")->dest(0)->reduce(rank, MPI_SUM);
-    if (rank == 0)
-        std::cout << number << '\n';
+//     auto number = mpi::comm("world")->dest(0)->reduce(rank, MPI_SUM);
+//     if (rank == 0)
+//         std::cout << number << '\n';
 
-    number = mpi::comm("world")->dest(0)->reduce(rank, MPI_MIN);
-    if (rank == 0)
-        std::cout << number << '\n';
+//     number = mpi::comm("world")->dest(0)->reduce(rank, MPI_MIN);
+//     if (rank == 0)
+//         std::cout << number << '\n';
 
-    number = mpi::comm("world")->dest(0)->reduce(rank, MPI_MAX);
-    if (rank == 0)
-        std::cout << number << '\n';
+//     number = mpi::comm("world")->dest(0)->reduce(rank, MPI_MAX);
+//     if (rank == 0)
+//         std::cout << number << '\n';
 
-    auto numbers = mpi::comm("world")->dest(0)->reduce(std::vector<int>{rank, 5 - rank}, MPI_SUM);
-    if (rank == 0)
-    {
-        for (auto &&number : numbers)
-            std::cout << number << ' ';
-        std::cout << '\n';
-    }
+//     auto numbers = mpi::comm("world")->dest(0)->reduce(std::vector<int>{rank, 5 - rank}, MPI_SUM);
+//     if (rank == 0)
+//     {
+//         for (auto &&number : numbers)
+//             std::cout << number << ' ';
+//         std::cout << '\n';
+//     }
 
-    numbers = mpi::comm("world")->dest(0)->reduce(std::vector<int>{rank, 5 - rank}, MPI_MIN);
-    if (rank == 0)
-    {
-        for (auto &&number : numbers)
-            std::cout << number << ' ';
-        std::cout << '\n';
-    }
+//     numbers = mpi::comm("world")->dest(0)->reduce(std::vector<int>{rank, 5 - rank}, MPI_MIN);
+//     if (rank == 0)
+//     {
+//         for (auto &&number : numbers)
+//             std::cout << number << ' ';
+//         std::cout << '\n';
+//     }
 
-    numbers = mpi::comm("world")->dest(0)->reduce(std::vector<int>{rank, 5 - rank}, MPI_MAX);
-    if (rank == 0)
-    {
-        for (auto &&number : numbers)
-            std::cout << number << ' ';
-        std::cout << '\n';
-    }
-    numbers = mpi::comm("world")->allreduce(std::vector<int>{rank, 5 - rank}, MPI_MAX);
-    for (auto &&number : numbers)
-        std::cout << number << ' ';
-    std::cout << '\n';
+//     numbers = mpi::comm("world")->dest(0)->reduce(std::vector<int>{rank, 5 - rank}, MPI_MAX);
+//     if (rank == 0)
+//     {
+//         for (auto &&number : numbers)
+//             std::cout << number << ' ';
+//         std::cout << '\n';
+//     }
+//     numbers = mpi::comm("world")->allreduce(std::vector<int>{rank, 5 - rank}, MPI_MAX);
+//     for (auto &&number : numbers)
+//         std::cout << number << ' ';
+//     std::cout << '\n';
 
-    return 0;
-}
+//     return 0;
+// }
