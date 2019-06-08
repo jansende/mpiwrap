@@ -26,9 +26,13 @@ if(NOT TARGET MPI::MPI_CXX)
 endif()
 #add mpi link
 target_link_libraries(mpiwrap INTERFACE MPI::MPI_CXX)
+#add additional build options
+option(MPIWRAP_EXAMPLES_ENABLED "Build examples" OFF)
 
 #add examples
-add_executable(hello_mpi examples/hello_mpi.cpp)
-target_link_libraries(hello_mpi PRIVATE mpiwrap)
-add_executable(send_recv examples/send_recv.cpp)
-target_link_libraries(send_recv PRIVATE mpiwrap)
+if (MPIWRAP_EXAMPLES_ENABLED)
+    add_executable(hello_mpi examples/hello_mpi.cpp)
+    target_link_libraries(hello_mpi PRIVATE mpiwrap)
+    add_executable(send_recv examples/send_recv.cpp)
+    target_link_libraries(send_recv PRIVATE mpiwrap)
+endif()

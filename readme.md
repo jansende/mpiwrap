@@ -1,6 +1,48 @@
-# Functions
+# Intro
+MPI (*Message Passing Interface*) is the standard for parallel, scientific programming. For whatever reason, the MPI commitee decided to drop C++ bindings a while ago. C bindings still exist, but being C, do not fit well into modern C++ programmes. **mpiwrap** seeks to solve that problem by providing a convenient C++ wrapper around the C bindings. Thus, if you are an avid C++ programmer who is disgusted by the horrible C interface of MPI, this is the library for you!
 
-| MPI Function                   | Implemented        | Usage with the `mpiwrap` wrapper                                   |
+**mpiwrap** provides overload for seamless usage with all standard C++ types, plus `std::vector` of these types. However, it is easy to provide user overloads for custom types. When useful, **mpiwrap** inserts additional checks in the form of `asserts` in order to prevent size errors when using vectors. Furthermore, **mpiwrap** tries to generalize all MPI functions, allowing the user to utilize a wider range of use-cases hassle-free.
+
+# Quickstart
+## Install using cmake
+The best way to install **mpiwrap** is to clone the repository and add the `add_subdirectory` and `target_link` library command to your `CMakeLists.txt`. This will automatically include MPI to your project (you need to install it separetly though). A simple project file might look like this:
+```cmake
+cmake_minimum_required(VERSION 3.1)
+
+#Define the project.
+project(hello_mpi)
+add_executable(hello_mpi main.cpp)
+
+#Add the mpiwrap repository.
+add_subdirectory(mpiwrap)
+#Add the library to the project.
+target_link_libraries(hello_mpi PRIVATE mpiwrap)
+```
+
+## Hello MPI
+You can then try MPI with a little sample programme:
+
+```c++
+#include <mpiwrap/mpi.h>
+
+int main(int argc, char **argv)
+{
+    mpi::mpi init{argc, argv};
+
+    auto world_size = mpi::comm("world")->size();
+    auto world_rank = mpi::comm("world")->rank();
+
+    auto processor_name = mpi::processor_name();
+    std::cout << "Hello world from processor " << processor_name << ", rank " << world_rank << " out of " << world_size << " processors.\n";
+
+    return 0;
+}
+```
+
+# Functions
+This is a list of the currently implemented MPI functions, and their usage with the **mpiwrap** wrapper. Values marked with bracket mean, that you have to substitute reasonable values there. For example: `[COMM]` is a `MPI_Comm` value, `[VALUE]` and `[BUCKET]` can be either single variables or `std::vectors`, and `[OP]` is a `MPI_Op` value. `[CHUNKSIZE]` and `[RANK]` are both positive integer values.
+
+| MPI Function                   | Implemented        | Usage with the **mpiwrap** wrapper                                 |
 |:-------------------------------|:------------------:|:-------------------------------------------------------------------|
 | MPI_Abort                      | :x:                |                                                                    |
 | MPI_Accumulate                 | :x:                |                                                                    |
