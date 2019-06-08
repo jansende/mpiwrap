@@ -7,7 +7,7 @@ endif()
 
 #create the mpiwrap project
 project(mpiwrap VERSION 0.1.0
-                DESCRIPTION "mpiwrap is a C++ wrapper for the horrible C interface of MPI libaries."
+                DESCRIPTION "mpiwrap is a C++ wrapper for the horrible C interface of MPI libraries."
                 LANGUAGES CXX)
 
 #add library interface
