@@ -9,10 +9,13 @@ endif()
 project(mpiwrap VERSION 0.1.0
                 DESCRIPTION "mpiwrap is a c++ wrapper for the horrible message passing interface."
                 LANGUAGES CXX)
-                
-#add executable name
-add_executable(mpiwrap include/mpiwrap/test.cpp)
 
+#add library interface
+add_library(mpiwrap INTERFACE)
+#add header files
+target_include_directories(mpiwrap INTERFACE ${CMAKE_CURRENT_SOURCE_DIR}/include)
+
+#add mpi
 find_package(MPI REQUIRED)
 #fix for cmake <3.9 --> https://cliutils.gitlab.io/modern-cmake/chapters/packages/MPI.html
 if(NOT TARGET MPI::MPI_CXX)
@@ -21,7 +24,16 @@ if(NOT TARGET MPI::MPI_CXX)
     set_property(TARGET MPI::MPI_CXX PROPERTY INTERFACE_INCLUDE_DIRECTORIES ${MPI_CXX_INCLUDE_PATH})
     set_property(TARGET MPI::MPI_CXX PROPERTY INTERFACE_LINK_LIBRARIES ${MPI_CXX_LINK_FLAGS} ${MPI_CXX_LIBRARIES})
 endif()
-target_link_libraries(mpiwrap PRIVATE MPI::MPI_CXX)
+#add mpi link
+target_link_libraries(mpiwrap INTERFACE MPI::MPI_CXX)
+
+#add examples
+add_executable(hello_mpi examples/hello_mpi.cpp)
+target_link_libraries(hello_mpi PRIVATE mpiwrap)
+add_executable(send_recv examples/send_recv.cpp)
+target_link_libraries(send_recv PRIVATE mpiwrap)
+
+
 
 
 

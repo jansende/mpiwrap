@@ -1,5 +1,5 @@
 #pragma once
-#include "mpi.h"
+#include <mpi.h>
 #include <string>
 #include <memory>
 #include <iostream>

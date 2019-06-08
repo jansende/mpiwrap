@@ -1,4 +1,4 @@
-#include "mpiwrap.h"
+#include <mpiwrap/mpi.h>
 
 //goal 1
 int main(int argc, char **argv)
