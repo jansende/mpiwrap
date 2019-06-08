@@ -18,19 +18,18 @@ auto processor_name() -> std::string
     MPI_Get_processor_name(name.data(), &size);
     return std::string{name.data()};
 }
-enum class op
+auto initialized() -> bool
 {
-    max,    //Returns the maximum element.
-    min,    //Returns the minimum element.
-    sum,    //Sums the elements.
-    prod,   //Multiplies all elements.
-    land,   //Performs a logical and across the elements.
-    lor,    //Performs a logical or across the elements.
-    band,   //Performs a bitwise and across the bits of the elements.
-    bor,    //Performs a bitwise or across the bits of the elements.
-    maxloc, //Returns the maximum value and the rank of the process that owns it.
-    minloc, //Returns the minimum value and the rank of the process that owns it.
-};
+    auto flag = int{};
+    MPI_Initialized(&flag);
+    return flag == true;
+}
+auto finalized() -> bool
+{
+    auto flag = int{};
+    MPI_Finalized(&flag);
+    return flag == true;
+}
 //NOTE: strings might not properly work for mixed string implementations
 class sender;
 class receiver;
@@ -39,6 +38,13 @@ auto allgather_impl(MPI_Comm _comm, const std::string &_value, std::string &_buc
 auto allgather_impl(MPI_Comm _comm, const char *_value, std::string &_bucket) -> void;
 template <class T>
 auto allgather_impl(MPI_Comm _comm, const std::vector<T> &_value, std::vector<T> &_bucket) -> void;
+
+template <class T>
+auto allreduce_impl(MPI_Comm _comm, const T &_value, T &_bucket, MPI_Op _operation) -> void;
+auto allreduce_impl(MPI_Comm _comm, const std::string &_value, std::string &_bucket, MPI_Op _operation) -> void;
+auto allreduce_impl(MPI_Comm _comm, const char *_value, std::string &_bucket, MPI_Op _operation) -> void;
+template <class T>
+auto allreduce_impl(MPI_Comm _comm, const std::vector<T> &_value, std::vector<T> &_bucket, MPI_Op _operation) -> void;
 
 class communicator
 {
@@ -114,6 +120,36 @@ public:
     auto barrier() -> void
     {
         MPI_Barrier(_comm);
+    }
+
+    template <class T>
+    auto allreduce(const T &_value, T &_bucket, MPI_Op _operation) -> void
+    {
+        allreduce_impl(_comm, _value, _bucket, _operation);
+    }
+    template <class T>
+    auto allreduce(const std::vector<T> &_value, MPI_Op _operation) -> std::vector<T>
+    {
+        auto _bucket = std::vector<T>{};
+        allreduce(_value, _bucket, _operation);
+        return _bucket;
+    }
+    auto allreduce(const std::string &_value, MPI_Op _operation) -> std::string
+    {
+        auto _bucket = std::string{};
+        allreduce(_value, _bucket, _operation);
+        return _bucket;
+    }
+    template <class T>
+    auto allreduce(const T _value, MPI_Op _operation) -> T
+    {
+        auto _bucket = T{};
+        allreduce(_value, _bucket, _operation);
+        return _bucket;
+    }
+    auto allreduce(const char *_value, MPI_Op _operation) -> std::string
+    {
+        return allreduce(std::string{_value}, _operation);
     }
 };
 auto comm(MPI_Comm _comm) -> std::unique_ptr<communicator>
@@ -292,6 +328,13 @@ auto gather_impl(int _dest, MPI_Comm _comm, const char *_value, std::string &_bu
 template <class T>
 auto gather_impl(int _dest, MPI_Comm _comm, const std::vector<T> &_value, std::vector<T> &_bucket) -> void;
 
+template <class T>
+auto reduce_impl(int _dest, MPI_Comm _comm, const T &_value, T &_bucket, MPI_Op _operation) -> void;
+auto reduce_impl(int _dest, MPI_Comm _comm, const std::string &_value, std::string &_bucket, MPI_Op _operation) -> void;
+auto reduce_impl(int _dest, MPI_Comm _comm, const char *_value, std::string &_bucket, MPI_Op _operation) -> void;
+template <class T>
+auto reduce_impl(int _dest, MPI_Comm _comm, const std::vector<T> &_value, std::vector<T> &_bucket, MPI_Op _operation) -> void;
+
 class sender
 {
 private:
@@ -344,6 +387,36 @@ public:
     {
         return gather(std::string{_value});
     }
+
+    template <class T>
+    auto reduce(const T &_value, T &_bucket, MPI_Op _operation) -> void
+    {
+        reduce_impl(_dest, _comm, _value, _bucket, _operation);
+    }
+    template <class T>
+    auto reduce(const std::vector<T> &_value, MPI_Op _operation) -> std::vector<T>
+    {
+        auto _bucket = std::vector<T>{};
+        reduce(_value, _bucket, _operation);
+        return _bucket;
+    }
+    auto reduce(const std::string &_value, MPI_Op _operation) -> std::string
+    {
+        auto _bucket = std::string{};
+        reduce(_value, _bucket, _operation);
+        return _bucket;
+    }
+    template <class T>
+    auto reduce(const T _value, MPI_Op _operation) -> T
+    {
+        auto _bucket = T{};
+        reduce(_value, _bucket, _operation);
+        return _bucket;
+    }
+    auto reduce(const char *_value, MPI_Op _operation) -> std::string
+    {
+        return reduce(std::string{_value}, _operation);
+    }
 };
 
 auto allgather_impl(MPI_Comm _comm, const std::string &_value, std::string &_bucket) -> void
@@ -385,6 +458,49 @@ auto allgather_impl(MPI_Comm _comm, const std::vector<T> &_value, std::vector<T>
         _bucket.resize(_size * _chunk_size);
     //gather the data
     MPI_Allgather(_value.data(), _chunk_size, type_wrapper<T>{}, _bucket.data(), _chunk_size, type_wrapper<T>{}, _comm);
+}
+
+template <class T>
+auto allreduce_impl(MPI_Comm _comm, const T &_value, T &_bucket, MPI_Op _operation) -> void
+{
+    //reduce the data
+    MPI_Reduce(&_value, &_bucket, 1, type_wrapper<T>{}, _operation, _comm);
+}
+auto allreduce_impl(MPI_Comm _comm, const std::string &_value, std::string &_bucket, MPI_Op _operation) -> void
+{
+    //get current rank
+    auto _rank = comm(_comm)->rank();
+    //broadcast the chunk_size before the string is reduced
+    auto _size = (_rank == 0) ? static_cast<int>(_value.size()) : int{};
+    comm(_comm)->source(0)->bcast(_size);
+    //check size
+    assert((_value.size() == _size));
+    //we need to allocate some memory for the result
+    auto _c_str = std::make_unique<char[]>((_rank == 0) ? _size + 1 : 0);
+    //reduce the data
+    MPI_Allreduce(_value.c_str(), _c_str.get(), _size, MPI_CHAR, _operation, _comm);
+    //we need to write the value back
+    _bucket = std::string{_c_str.get()};
+}
+auto allreduce_impl(MPI_Comm _comm, const char *_value, std::string &_bucket, MPI_Op _operation) -> void
+{
+    allreduce_impl(_comm, std::string{_value}, _bucket, _operation);
+}
+template <class T>
+auto allreduce_impl(MPI_Comm _comm, const std::vector<T> &_value, std::vector<T> &_bucket, MPI_Op _operation) -> void
+{
+    //get current rank
+    auto _rank = comm(_comm)->rank();
+    //broadcast the chunk_size before the data is reduced
+    auto _size = (_rank == 0) ? static_cast<int>(_value.size()) : int{};
+    comm(_comm)->source(0)->bcast(_size);
+    //check size
+    assert((_value.size() == _size));
+    //resize bucket to take all elements
+    if (_size != _bucket.size())
+        _bucket.resize(_size);
+    //reduce the data
+    MPI_Allreduce(_value.data(), _bucket.data(), _size, type_wrapper<T>{}, _operation, _comm);
 }
 
 template <class T>
@@ -542,6 +658,53 @@ auto gather_impl(int _dest, MPI_Comm _comm, const std::vector<T> &_value, std::v
     }
     //gather the data
     MPI_Gather(_value.data(), _chunk_size, type_wrapper<T>{}, _bucket.data(), _chunk_size, type_wrapper<T>{}, _dest, _comm);
+}
+
+template <class T>
+auto reduce_impl(int _dest, MPI_Comm _comm, const T &_value, T &_bucket, MPI_Op _operation) -> void
+{
+    //reduce the data
+    MPI_Reduce(&_value, &_bucket, 1, type_wrapper<T>{}, _operation, _dest, _comm);
+}
+auto reduce_impl(int _dest, MPI_Comm _comm, const std::string &_value, std::string &_bucket, MPI_Op _operation) -> void
+{
+    //get current rank
+    auto _rank = comm(_comm)->rank();
+    //broadcast the chunk_size before the string is reduced
+    auto _size = (_rank == _dest) ? static_cast<int>(_value.size()) : int{};
+    comm(_comm)->source(_dest)->bcast(_size);
+    //check size
+    assert((_value.size() == _size));
+    //we need to allocate some memory for the result
+    auto _c_str = std::make_unique<char[]>((_rank == _dest) ? _size + 1 : 0);
+    //reduce the data
+    MPI_Reduce(_value.c_str(), _c_str.get(), _size, MPI_CHAR, _operation, _dest, _comm);
+    //we need to write the value back
+    if (_rank == _dest)
+        _bucket = std::string{_c_str.get()};
+}
+auto reduce_impl(int _dest, MPI_Comm _comm, const char *_value, std::string &_bucket, MPI_Op _operation) -> void
+{
+    reduce_impl(_dest, _comm, std::string{_value}, _bucket, _operation);
+}
+template <class T>
+auto reduce_impl(int _dest, MPI_Comm _comm, const std::vector<T> &_value, std::vector<T> &_bucket, MPI_Op _operation) -> void
+{
+    //get current rank
+    auto _rank = comm(_comm)->rank();
+    //broadcast the chunk_size before the data is reduced
+    auto _size = (_rank == _dest) ? static_cast<int>(_value.size()) : int{};
+    comm(_comm)->source(_dest)->bcast(_size);
+    //check size
+    assert((_value.size() == _size));
+    //resize bucket to take all elements
+    if (_rank == _dest)
+    {
+        if (_size != _bucket.size())
+            _bucket.resize(_size);
+    }
+    //reduce the data
+    MPI_Reduce(_value.data(), _bucket.data(), _size, type_wrapper<T>{}, _operation, _dest, _comm);
 }
 
 } // namespace mpi

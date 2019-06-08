@@ -130,35 +130,85 @@
 // }
 
 //goal 5
+// int main(int argc, char **argv)
+// {
+//     mpi::mpi init{argc, argv};
+
+//     auto rank = mpi::comm("world")->rank();
+
+//     auto numbers = std::vector<double>{};
+//     numbers = mpi::comm("world")->dest(0)->gather(42.0);
+//     for (auto &&number : numbers)
+//         std::cout << number << ' ';
+//     std::cout << '\n';
+//     numbers = mpi::comm("world")->source(0)->scatter(numbers, 2);
+//     numbers = mpi::comm("world")->allgather(7.0);
+//     for (auto &&number : numbers)
+//         std::cout << number << ' ';
+//     std::cout << '\n';
+
+//     auto message = std::string{};
+//     message = mpi::comm("world")->dest(0)->gather('d');
+//     std::cout << message << '\n';
+//     message = mpi::comm("world")->source(0)->scatter(message, 3);
+//     message = mpi::comm("world")->allgather('c');
+//     std::cout << message << '\n';
+
+//     message = mpi::comm("world")->dest(0)->gather("hi");
+//     std::cout << message << '\n';
+//     message = mpi::comm("world")->source(0)->scatter(message, 3);
+//     message = mpi::comm("world")->allgather("ho");
+//     std::cout << message << '\n';
+
+//     return 0;
+// }
+
+//goal 6
 int main(int argc, char **argv)
 {
     mpi::mpi init{argc, argv};
 
     auto rank = mpi::comm("world")->rank();
 
-    auto numbers = std::vector<double>{};
-    numbers = mpi::comm("world")->dest(0)->gather(42.0);
+    auto number = mpi::comm("world")->dest(0)->reduce(rank, MPI_SUM);
+    if (rank == 0)
+        std::cout << number << '\n';
+
+    number = mpi::comm("world")->dest(0)->reduce(rank, MPI_MIN);
+    if (rank == 0)
+        std::cout << number << '\n';
+
+    number = mpi::comm("world")->dest(0)->reduce(rank, MPI_MAX);
+    if (rank == 0)
+        std::cout << number << '\n';
+
+    auto numbers = mpi::comm("world")->dest(0)->reduce(std::vector<int>{rank, 5 - rank}, MPI_SUM);
+    if (rank == 0)
+    {
+        for (auto &&number : numbers)
+            std::cout << number << ' ';
+        std::cout << '\n';
+    }
+
+    numbers = mpi::comm("world")->dest(0)->reduce(std::vector<int>{rank, 5 - rank}, MPI_MIN);
+    if (rank == 0)
+    {
+        for (auto &&number : numbers)
+            std::cout << number << ' ';
+        std::cout << '\n';
+    }
+
+    numbers = mpi::comm("world")->dest(0)->reduce(std::vector<int>{rank, 5 - rank}, MPI_MAX);
+    if (rank == 0)
+    {
+        for (auto &&number : numbers)
+            std::cout << number << ' ';
+        std::cout << '\n';
+    }
+    numbers = mpi::comm("world")->allreduce(std::vector<int>{rank, 5 - rank}, MPI_MAX);
     for (auto &&number : numbers)
         std::cout << number << ' ';
     std::cout << '\n';
-    numbers = mpi::comm("world")->source(0)->scatter(numbers, 2);
-    numbers = mpi::comm("world")->allgather(7.0);
-    for (auto &&number : numbers)
-        std::cout << number << ' ';
-    std::cout << '\n';
-
-    auto message = std::string{};
-    message = mpi::comm("world")->dest(0)->gather('d');
-    std::cout << message << '\n';
-    message = mpi::comm("world")->source(0)->scatter(message, 3);
-    message = mpi::comm("world")->allgather('c');
-    std::cout << message << '\n';
-
-    message = mpi::comm("world")->dest(0)->gather("hi");
-    std::cout << message << '\n';
-    message = mpi::comm("world")->source(0)->scatter(message, 3);
-    message = mpi::comm("world")->allgather("ho");
-    std::cout << message << '\n';
 
     return 0;
 }
