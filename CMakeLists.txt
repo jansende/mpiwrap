@@ -28,6 +28,12 @@ endif()
 target_link_libraries(mpiwrap INTERFACE MPI::MPI_CXX)
 #add additional build options
 option(MPIWRAP_EXAMPLES_ENABLED "Build examples" OFF)
+option(MPIWRAP_PARANOID_ASSERTIONS "Use paranoid assertions" OFF)
+
+#enter paranoia
+if (MPIWRAP_PARANOID_ASSERTIONS)
+    target_compile_definitions(mpiwrap INTERFACE BE_PARANOID)
+endif()
 
 #add examples
 if (MPIWRAP_EXAMPLES_ENABLED)

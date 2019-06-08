@@ -9,6 +9,12 @@
 #include <cassert>
 #include <functional>
 
+#ifdef BE_PARANOID
+#define paranoidly_assert(condition) assert(condition)
+#else
+#define paranoidly_assert(condition) ((void)0)
+#endif
+
 namespace mpi
 {
 
@@ -33,14 +39,6 @@ namespace mpi
 //     return std::unique_ptr<MPI_Op, std::function<void(MPI_Op*)>>(_new_operation.release(), [](auto _operation){ MPI_Op_free(_operation);});
 // }
 
-auto processor_name() -> std::string
-{
-    auto name = std::array<char, MPI_MAX_PROCESSOR_NAME>{};
-    auto size = static_cast<int>(name.size());
-    //add error checking
-    MPI_Get_processor_name(name.data(), &size);
-    return std::string{name.data()};
-}
 auto initialized() -> bool
 {
     auto flag = int{};
@@ -52,6 +50,16 @@ auto finalized() -> bool
     auto flag = int{};
     MPI_Finalized(&flag);
     return flag == true;
+}
+auto processor_name() -> std::string
+{
+    paranoidly_assert((initialized()));
+    paranoidly_assert((!finalized()));
+    auto name = std::array<char, MPI_MAX_PROCESSOR_NAME>{};
+    auto size = static_cast<int>(name.size());
+    //add error checking
+    MPI_Get_processor_name(name.data(), &size);
+    return std::string{name.data()};
 }
 //NOTE: strings might not properly work for mixed string implementations
 class sender;
@@ -88,6 +96,8 @@ public:
 
     auto size() -> int
     {
+        paranoidly_assert((initialized()));
+        paranoidly_assert((!finalized()));
         auto _size = int{};
         //add error checking
         MPI_Comm_size(_comm, &_size);
@@ -95,6 +105,8 @@ public:
     }
     auto rank() -> int
     {
+        paranoidly_assert((initialized()));
+        paranoidly_assert((!finalized()));
         auto _rank = int{};
         //add error checking
         MPI_Comm_rank(_comm, &_rank);
@@ -102,6 +114,8 @@ public:
     }
     auto name() -> std::string
     {
+        paranoidly_assert((initialized()));
+        paranoidly_assert((!finalized()));
         auto _name = std::make_unique<char[]>(MPI_MAX_OBJECT_NAME);
         auto _size = MPI_MAX_OBJECT_NAME;
         //add error checking
@@ -159,6 +173,8 @@ public:
 
     auto barrier() -> void
     {
+        paranoidly_assert((initialized()));
+        paranoidly_assert((!finalized()));
         MPI_Barrier(_comm);
     }
 
@@ -212,11 +228,15 @@ public:
     mpi &operator=(const mpi &) = delete;
     mpi(int argc, char **argv)
     {
+        paranoidly_assert((!initialized()));
+        paranoidly_assert((!finalized()));
         //add error checking
         MPI_Init(&argc, &argv);
     }
     ~mpi()
     {
+        paranoidly_assert((initialized()));
+        paranoidly_assert((!finalized()));
         //add error checking
         MPI_Finalize();
     }
@@ -512,6 +532,8 @@ public:
 
 auto allgather_impl(MPI_Comm _comm, const std::string &_value, std::string &_bucket) -> void
 {
+    paranoidly_assert((initialized()));
+    paranoidly_assert((!finalized()));
     //get current rank
     auto _rank = comm(_comm)->rank();
     //get world size
@@ -535,6 +557,8 @@ auto allgather_impl(MPI_Comm _comm, const char *_value, std::string &_bucket) ->
 template <class T>
 auto allgather_impl(MPI_Comm _comm, const std::vector<T> &_value, std::vector<T> &_bucket) -> void
 {
+    paranoidly_assert((initialized()));
+    paranoidly_assert((!finalized()));
     //get current rank
     auto _rank = comm(_comm)->rank();
     //get world size
@@ -554,11 +578,15 @@ auto allgather_impl(MPI_Comm _comm, const std::vector<T> &_value, std::vector<T>
 template <class T>
 auto allreduce_impl(MPI_Comm _comm, const T &_value, T &_bucket, MPI_Op _operation) -> void
 {
+    paranoidly_assert((initialized()));
+    paranoidly_assert((!finalized()));
     //reduce the data
     MPI_Reduce(&_value, &_bucket, 1, type_wrapper<T>{}, _operation, _comm);
 }
 auto allreduce_impl(MPI_Comm _comm, const std::string &_value, std::string &_bucket, MPI_Op _operation) -> void
 {
+    paranoidly_assert((initialized()));
+    paranoidly_assert((!finalized()));
     //get current rank
     auto _rank = comm(_comm)->rank();
     //broadcast the chunk_size before the string is reduced
@@ -580,6 +608,8 @@ auto allreduce_impl(MPI_Comm _comm, const char *_value, std::string &_bucket, MP
 template <class T>
 auto allreduce_impl(MPI_Comm _comm, const std::vector<T> &_value, std::vector<T> &_bucket, MPI_Op _operation) -> void
 {
+    paranoidly_assert((initialized()));
+    paranoidly_assert((!finalized()));
     //get current rank
     auto _rank = comm(_comm)->rank();
     //broadcast the chunk_size before the data is reduced
@@ -597,10 +627,14 @@ auto allreduce_impl(MPI_Comm _comm, const std::vector<T> &_value, std::vector<T>
 template <class T>
 auto recv_impl(int _source, int _tag, MPI_Comm _comm, MPI_Status *_status, T &_value) -> void
 {
+    paranoidly_assert((initialized()));
+    paranoidly_assert((!finalized()));
     MPI_Recv(&_value, 1, type_wrapper<T>{}, _source, _tag, _comm, _status);
 }
 auto recv_impl(int _source, int _tag, MPI_Comm _comm, MPI_Status *_status, std::string &_value) -> void
 {
+    paranoidly_assert((initialized()));
+    paranoidly_assert((!finalized()));
     //we need to finde the proper size of the incoming string
     MPI_Probe(_source, _tag, _comm, _status);
     auto _size = int{};
@@ -615,6 +649,8 @@ auto recv_impl(int _source, int _tag, MPI_Comm _comm, MPI_Status *_status, std::
 template <class T>
 auto recv_impl(int _source, int _tag, MPI_Comm _comm, MPI_Status *_status, std::vector<T> &_value) -> void
 {
+    paranoidly_assert((initialized()));
+    paranoidly_assert((!finalized()));
     //we need to finde the proper size of the incoming data
     MPI_Probe(_source, _tag, _comm, _status);
     auto _size = int{};
@@ -628,10 +664,14 @@ auto recv_impl(int _source, int _tag, MPI_Comm _comm, MPI_Status *_status, std::
 template <class T>
 auto bcast_impl(int _source, MPI_Comm _comm, T &_value) -> void
 {
+    paranoidly_assert((initialized()));
+    paranoidly_assert((!finalized()));
     MPI_Bcast(&_value, 1, type_wrapper<T>{}, _source, _comm);
 }
 auto bcast_impl(int _source, MPI_Comm _comm, std::string &_value) -> void
 {
+    paranoidly_assert((initialized()));
+    paranoidly_assert((!finalized()));
     //get current rank
     auto _rank = comm(_comm)->rank();
     //broadcast the size before the string
@@ -650,6 +690,8 @@ auto bcast_impl(int _source, MPI_Comm _comm, std::string &_value) -> void
 template <class T>
 auto bcast_impl(int _source, MPI_Comm _comm, std::vector<T> &_value) -> void
 {
+    paranoidly_assert((initialized()));
+    paranoidly_assert((!finalized()));
     //get current rank
     auto _rank = comm(_comm)->rank();
     //broadcast the size before the data
@@ -664,6 +706,8 @@ auto bcast_impl(int _source, MPI_Comm _comm, std::vector<T> &_value) -> void
 
 auto scatter_impl(int _source, MPI_Comm _comm, const std::string &_value, const size_t _chunk_size) -> std::string
 {
+    paranoidly_assert((initialized()));
+    paranoidly_assert((!finalized()));
     //get current rank
     auto _rank = comm(_comm)->rank();
     //we need a copy of the original data
@@ -680,6 +724,8 @@ auto scatter_impl(int _source, MPI_Comm _comm, const std::string &_value, const 
 template <class T>
 auto scatter_impl(int _source, MPI_Comm _comm, const std::vector<T> &_value, const size_t _chunk_size) -> std::vector<T>
 {
+    paranoidly_assert((initialized()));
+    paranoidly_assert((!finalized()));
     //create result container
     auto _chunk = std::vector<T>(_chunk_size);
     //scatter the data
@@ -690,28 +736,40 @@ auto scatter_impl(int _source, MPI_Comm _comm, const std::vector<T> &_value, con
 template <class T>
 auto send_impl(int _dest, int _tag, MPI_Comm _comm, const T _value) -> void
 {
+    paranoidly_assert((initialized()));
+    paranoidly_assert((!finalized()));
     MPI_Send(&_value, 1, type_wrapper<T>{}, _dest, _tag, _comm);
 }
 auto send_impl(int _dest, int _tag, MPI_Comm _comm, const std::string &_value) -> void
 {
+    paranoidly_assert((initialized()));
+    paranoidly_assert((!finalized()));
     MPI_Send(_value.c_str(), _value.size() + 1, MPI_CHAR, _dest, _tag, _comm);
 }
 auto send_impl(int _dest, int _tag, MPI_Comm _comm, const char *_value) -> void
 {
+    paranoidly_assert((initialized()));
+    paranoidly_assert((!finalized()));
     send_impl(_dest, _tag, _comm, std::string{_value});
 }
 template <class T>
 auto send_impl(int _dest, int _tag, MPI_Comm _comm, const std::vector<T> &_value) -> void
 {
+    paranoidly_assert((initialized()));
+    paranoidly_assert((!finalized()));
     MPI_Send(_value.data(), _value.size(), type_wrapper<T>{}, _dest, _tag, _comm);
 }
 template <class T>
 auto bsend_impl(int _dest, int _tag, MPI_Comm _comm, const T _value) -> void
 {
+    paranoidly_assert((initialized()));
+    paranoidly_assert((!finalized()));
     MPI_Bsend(&_value, 1, type_wrapper<T>{}, _dest, _tag, _comm);
 }
 auto bsend_impl(int _dest, int _tag, MPI_Comm _comm, const std::string &_value) -> void
 {
+    paranoidly_assert((initialized()));
+    paranoidly_assert((!finalized()));
     MPI_Bsend(_value.c_str(), _value.size() + 1, MPI_CHAR, _dest, _tag, _comm);
 }
 auto bsend_impl(int _dest, int _tag, MPI_Comm _comm, const char *_value) -> void
@@ -721,15 +779,21 @@ auto bsend_impl(int _dest, int _tag, MPI_Comm _comm, const char *_value) -> void
 template <class T>
 auto bsend_impl(int _dest, int _tag, MPI_Comm _comm, const std::vector<T> &_value) -> void
 {
+    paranoidly_assert((initialized()));
+    paranoidly_assert((!finalized()));
     MPI_Bsend(_value.data(), _value.size(), type_wrapper<T>{}, _dest, _tag, _comm);
 }
 template <class T>
 auto ssend_impl(int _dest, int _tag, MPI_Comm _comm, const T _value) -> void
 {
+    paranoidly_assert((initialized()));
+    paranoidly_assert((!finalized()));
     MPI_Ssend(&_value, 1, type_wrapper<T>{}, _dest, _tag, _comm);
 }
 auto ssend_impl(int _dest, int _tag, MPI_Comm _comm, const std::string &_value) -> void
 {
+    paranoidly_assert((initialized()));
+    paranoidly_assert((!finalized()));
     MPI_Ssend(_value.c_str(), _value.size() + 1, MPI_CHAR, _dest, _tag, _comm);
 }
 auto ssend_impl(int _dest, int _tag, MPI_Comm _comm, const char *_value) -> void
@@ -739,15 +803,21 @@ auto ssend_impl(int _dest, int _tag, MPI_Comm _comm, const char *_value) -> void
 template <class T>
 auto ssend_impl(int _dest, int _tag, MPI_Comm _comm, const std::vector<T> &_value) -> void
 {
+    paranoidly_assert((initialized()));
+    paranoidly_assert((!finalized()));
     MPI_Ssend(_value.data(), _value.size(), type_wrapper<T>{}, _dest, _tag, _comm);
 }
 template <class T>
 auto rsend_impl(int _dest, int _tag, MPI_Comm _comm, const T _value) -> void
 {
+    paranoidly_assert((initialized()));
+    paranoidly_assert((!finalized()));
     MPI_Rsend(&_value, 1, type_wrapper<T>{}, _dest, _tag, _comm);
 }
 auto rsend_impl(int _dest, int _tag, MPI_Comm _comm, const std::string &_value) -> void
 {
+    paranoidly_assert((initialized()));
+    paranoidly_assert((!finalized()));
     MPI_Rsend(_value.c_str(), _value.size() + 1, MPI_CHAR, _dest, _tag, _comm);
 }
 auto rsend_impl(int _dest, int _tag, MPI_Comm _comm, const char *_value) -> void
@@ -757,11 +827,15 @@ auto rsend_impl(int _dest, int _tag, MPI_Comm _comm, const char *_value) -> void
 template <class T>
 auto rsend_impl(int _dest, int _tag, MPI_Comm _comm, const std::vector<T> &_value) -> void
 {
+    paranoidly_assert((initialized()));
+    paranoidly_assert((!finalized()));
     MPI_Rsend(_value.data(), _value.size(), type_wrapper<T>{}, _dest, _tag, _comm);
 }
 
 auto gather_impl(int _dest, MPI_Comm _comm, const std::string &_value, std::string &_bucket) -> void
 {
+    paranoidly_assert((initialized()));
+    paranoidly_assert((!finalized()));
     //get current rank
     auto _rank = comm(_comm)->rank();
     //get world size
@@ -786,6 +860,8 @@ auto gather_impl(int _dest, MPI_Comm _comm, const char *_value, std::string &_bu
 template <class T>
 auto gather_impl(int _dest, MPI_Comm _comm, const std::vector<T> &_value, std::vector<T> &_bucket) -> void
 {
+    paranoidly_assert((initialized()));
+    paranoidly_assert((!finalized()));
     //get current rank
     auto _rank = comm(_comm)->rank();
     //get world size
@@ -808,11 +884,15 @@ auto gather_impl(int _dest, MPI_Comm _comm, const std::vector<T> &_value, std::v
 template <class T>
 auto reduce_impl(int _dest, MPI_Comm _comm, const T &_value, T &_bucket, MPI_Op _operation) -> void
 {
+    paranoidly_assert((initialized()));
+    paranoidly_assert((!finalized()));
     //reduce the data
     MPI_Reduce(&_value, &_bucket, 1, type_wrapper<T>{}, _operation, _dest, _comm);
 }
 auto reduce_impl(int _dest, MPI_Comm _comm, const std::string &_value, std::string &_bucket, MPI_Op _operation) -> void
 {
+    paranoidly_assert((initialized()));
+    paranoidly_assert((!finalized()));
     //get current rank
     auto _rank = comm(_comm)->rank();
     //broadcast the chunk_size before the string is reduced
@@ -835,6 +915,8 @@ auto reduce_impl(int _dest, MPI_Comm _comm, const char *_value, std::string &_bu
 template <class T>
 auto reduce_impl(int _dest, MPI_Comm _comm, const std::vector<T> &_value, std::vector<T> &_bucket, MPI_Op _operation) -> void
 {
+    paranoidly_assert((initialized()));
+    paranoidly_assert((!finalized()));
     //get current rank
     auto _rank = comm(_comm)->rank();
     //broadcast the chunk_size before the data is reduced
