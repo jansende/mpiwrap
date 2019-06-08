@@ -64,10 +64,10 @@ This is a list of the currently implemented MPI functions, and their usage with 
 | MPI_Attr_put                   | :x:                |                                                                    |
 | MPI_Barrier                    | :heavy_check_mark: | `mpi::comm([COMM])->barrier()`                                     |
 | MPI_Bcast                      | :heavy_check_mark: | `mpi::comm([COMM])->source([RANK])->bcast[VALUE])`                 |
-| MPI_Bsend                      | :x:                |                                                                    |
+| MPI_Bsend                      | :heavy_check_mark: | `mpi::comm([COMM])->dest([RANK])->bsend([VALUE])`                  |
 | MPI_Bsend_init                 | :x:                |                                                                    |
-| MPI_Buffer_attach              | :x:                |                                                                    |
-| MPI_Buffer_detach              | :x:                |                                                                    |
+| MPI_Buffer_attach              | :x:                | These functions will not be implemented, as they are very unsafe.  |
+| MPI_Buffer_detach              | :x:                | These functions will not be implemented, as they are very unsafe.  |
 | MPI_Cancel                     | :x:                |                                                                    |
 | MPI_Cart_coords                | :x:                |                                                                    |
 | MPI_Cart_create                | :x:                |                                                                    |
@@ -303,7 +303,7 @@ This is a list of the currently implemented MPI functions, and their usage with 
 | MPI_Rget                       | :x:                |                                                                    |
 | MPI_Rget_accumulate            | :x:                |                                                                    |
 | MPI_Rput                       | :x:                |                                                                    |
-| MPI_Rsend                      | :x:                |                                                                    |
+| MPI_Rsend                      | :heavy_check_mark: | `mpi::comm([COMM])->dest([RANK])->rsend([VALUE])`                  |
 | MPI_Rsend_init                 | :x:                |                                                                    |
 | MPI_Scan                       | :x:                |                                                                    |
 | MPI_Scatter                    | :heavy_check_mark: | `mpi::comm([COMM])->source([RANK])->scatter([VALUE], [CHUNKSIZE])` |
@@ -312,7 +312,7 @@ This is a list of the currently implemented MPI functions, and their usage with 
 | MPI_Send_init                  | :x:                |                                                                    |
 | MPI_Sendrecv                   | :x:                |                                                                    |
 | MPI_Sendrecv_replace           | :x:                |                                                                    |
-| MPI_Ssend                      | :x:                |                                                                    |
+| MPI_Ssend                      | :heavy_check_mark: | `mpi::comm([COMM])->dest([RANK])->ssend([VALUE])`                  |
 | MPI_Ssend_init                 | :x:                |                                                                    |
 | MPI_Start                      | :x:                |                                                                    |
 | MPI_Startall                   | :x:                |                                                                    |
