@@ -62,8 +62,8 @@ This is a list of the currently implemented MPI functions, and their usage with 
 | MPI_Attr_delete                | :x:                |                                                                    |
 | MPI_Attr_get                   | :x:                |                                                                    |
 | MPI_Attr_put                   | :x:                |                                                                    |
-| MPI_Barrier                    | :heavy_check_mark: | `mpi::com([COMM])->barrier()`                                      |
-| MPI_Bcast                      | :heavy_check_mark: | `mpi::com([COMM])->source([RANK])->bcast([VALUE])`                 |
+| MPI_Barrier                    | :heavy_check_mark: | `mpi::comm([COMM])->barrier()`                                     |
+| MPI_Bcast                      | :heavy_check_mark: | `mpi::comm([COMM])->source([RANK])->bcast[VALUE])`                 |
 | MPI_Bsend                      | :x:                |                                                                    |
 | MPI_Bsend_init                 | :x:                |                                                                    |
 | MPI_Buffer_attach              | :x:                |                                                                    |
