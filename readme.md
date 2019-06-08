@@ -1,3 +1,5 @@
+# Functions
+
 | MPI Function                   | Implemented        | Usage with the `mpiwrap` wrapper                                   |
 |:-------------------------------|:------------------:|:-------------------------------------------------------------------|
 | MPI_Abort                      | :x:                |                                                                    |
