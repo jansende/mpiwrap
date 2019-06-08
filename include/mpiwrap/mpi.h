@@ -392,12 +392,6 @@ auto send_impl(int _dest, int _tag, MPI_Comm _comm, const char *_value) -> void;
 template <class T>
 auto send_impl(int _dest, int _tag, MPI_Comm _comm, const std::vector<T> &_value) -> void;
 template <class T>
-auto bsend_impl(int _dest, int _tag, MPI_Comm _comm, const T _value) -> void;
-auto bsend_impl(int _dest, int _tag, MPI_Comm _comm, const std::string &_value) -> void;
-auto bsend_impl(int _dest, int _tag, MPI_Comm _comm, const char *_value) -> void;
-template <class T>
-auto bsend_impl(int _dest, int _tag, MPI_Comm _comm, const std::vector<T> &_value) -> void;
-template <class T>
 auto ssend_impl(int _dest, int _tag, MPI_Comm _comm, const T _value) -> void;
 auto ssend_impl(int _dest, int _tag, MPI_Comm _comm, const std::string &_value) -> void;
 auto ssend_impl(int _dest, int _tag, MPI_Comm _comm, const char *_value) -> void;
@@ -445,11 +439,6 @@ public:
     auto send(const T _value) -> void
     {
         send_impl(_dest, _tag, _comm, _value);
-    }
-    template <class T>
-    auto bsend(const T _value) -> void
-    {
-        bsend_impl(_dest, _tag, _comm, _value);
     }
     template <class T>
     auto ssend(const T _value) -> void
@@ -758,30 +747,6 @@ auto send_impl(int _dest, int _tag, MPI_Comm _comm, const std::vector<T> &_value
     paranoidly_assert((initialized()));
     paranoidly_assert((!finalized()));
     MPI_Send(_value.data(), _value.size(), type_wrapper<T>{}, _dest, _tag, _comm);
-}
-template <class T>
-auto bsend_impl(int _dest, int _tag, MPI_Comm _comm, const T _value) -> void
-{
-    paranoidly_assert((initialized()));
-    paranoidly_assert((!finalized()));
-    MPI_Bsend(&_value, 1, type_wrapper<T>{}, _dest, _tag, _comm);
-}
-auto bsend_impl(int _dest, int _tag, MPI_Comm _comm, const std::string &_value) -> void
-{
-    paranoidly_assert((initialized()));
-    paranoidly_assert((!finalized()));
-    MPI_Bsend(_value.c_str(), _value.size() + 1, MPI_CHAR, _dest, _tag, _comm);
-}
-auto bsend_impl(int _dest, int _tag, MPI_Comm _comm, const char *_value) -> void
-{
-    bsend_impl(_dest, _tag, _comm, std::string{_value});
-}
-template <class T>
-auto bsend_impl(int _dest, int _tag, MPI_Comm _comm, const std::vector<T> &_value) -> void
-{
-    paranoidly_assert((initialized()));
-    paranoidly_assert((!finalized()));
-    MPI_Bsend(_value.data(), _value.size(), type_wrapper<T>{}, _dest, _tag, _comm);
 }
 template <class T>
 auto ssend_impl(int _dest, int _tag, MPI_Comm _comm, const T _value) -> void

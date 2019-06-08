@@ -64,10 +64,10 @@ This is a list of the currently implemented MPI functions, and their usage with 
 | MPI_Attr_put                   | :x:                |                                                                    |
 | MPI_Barrier                    | :heavy_check_mark: | `mpi::comm([COMM])->barrier()`                                     |
 | MPI_Bcast                      | :heavy_check_mark: | `mpi::comm([COMM])->source([RANK])->bcast[VALUE])`                 |
-| MPI_Bsend                      | :heavy_check_mark: | `mpi::comm([COMM])->dest([RANK])->bsend([VALUE])`                  |
-| MPI_Bsend_init                 | :x:                |                                                                    |
-| MPI_Buffer_attach              | :x:                | These functions will not be implemented, as they are very unsafe.  |
-| MPI_Buffer_detach              | :x:                | These functions will not be implemented, as they are very unsafe.  |
+| MPI_Bsend                      | :x:                | Will not be implemented because raw memory management is required. |
+| MPI_Bsend_init                 | :x:                | Will not be implemented because raw memory management is required. |
+| MPI_Buffer_attach              | :x:                | Will not be implemented because raw memory management is required. |
+| MPI_Buffer_detach              | :x:                | Will not be implemented because raw memory management is required. |
 | MPI_Cancel                     | :x:                |                                                                    |
 | MPI_Cart_coords                | :x:                |                                                                    |
 | MPI_Cart_create                | :x:                |                                                                    |
