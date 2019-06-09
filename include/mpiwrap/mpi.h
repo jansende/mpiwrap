@@ -2,12 +2,12 @@
 #include <mpi.h>
 #include <string>
 #include <memory>
-#include <iostream>
 #include <array>
 #include <vector>
 #include <cstring>
 #include <cassert>
 #include <functional>
+#include <algorithm>
 
 #ifdef BE_PARANOID
 #define paranoidly_assert(condition) assert(condition)
@@ -17,11 +17,57 @@
 
 namespace mpi
 {
-
-// template <class T, class Result>
-// auto make_op(const std::function<Result(T, T)>& _operation, const bool _commute = false) -> std::unique_ptr<MPI_Op>
+// template <class T>
+// class op_proxy
 // {
+// private:
+//     MPI_Op _operation;
+//     // const std::function<T(T, T)> _func;
+//     // const bool _commute;
+//     const std::function<void(void *, void *, int *, MPI_Datatype *)> _op;
 
+// public:
+//     op_proxy(const op_proxy &) = delete;
+//     op_proxy(op_proxy &&) = delete;
+//     op_proxy &operator=(const op_proxy &) = delete;
+
+//     op_proxy(const std::function<T(T, T)> &_func, const bool _commute) : _op([_func](void *p_in, void *p_inout, int *len, MPI_Datatype *) {
+//                                                                              auto in = static_cast<T *>(p_in);
+//                                                                              auto inout = static_cast<T *>(p_inout);
+
+//                                                                              std::transform(in, in + *len, inout, inout, _func);
+//                                                                          })
+//     {
+
+//         paranoidly_assert((initialized()));
+//         paranoidly_assert((!finalized()));
+//         // MPI_User_function* pointer = _op.target<MPI_User_function>();
+//         MPI_User_function* pointer = &_op;
+//         MPI_Op_create(pointer, _commute, &_operation);
+//     }
+//     ~op_proxy()
+//     {
+//         paranoidly_assert((initialized()));
+//         paranoidly_assert((!finalized()));
+
+//         MPI_Op_free(&_operation);
+//     }
+
+//     auto op() const -> const MPI_Op &
+//     {
+//         return _operation;
+//     }
+
+//     // auto op() const -> const MPI_Op &
+//     // {
+//     //     return _operation;
+//     // }
+// };
+
+// template <class T>
+// auto make_op(const std::function<T(T, T)> _func, const bool _commute = false) -> std::unique_ptr<op_proxy<T>>
+// {
+//     return std::make_unique<op_proxy<T>>(_func, _commute);
 // }
 // template <class T, class Result>
 // auto make_op(const std::function<std::vector<Result>(std::vector<T>, std::vector<T>)>& _operation, const bool _commute = false) -> std::unique_ptr<MPI_Op>

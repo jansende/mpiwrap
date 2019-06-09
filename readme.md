@@ -277,9 +277,9 @@ This is a list of the currently implemented MPI functions, and their usage with 
 | MPI_Neighbor_alltoall          | :x:                |                                                                    |
 | MPI_Neighbor_alltoallv         | :x:                |                                                                    |
 | MPI_Neighbor_alltoallw         | :x:                |                                                                    |
-| MPI_Op_commute                 | :x:                |                                                                    |
-| MPI_Op_create                  | :x:                |                                                                    |
-| MPI_Op_free                    | :x:                |                                                                    |
+| MPI_Op_commute                 | :x:                | Will not be implemented because it is incompatible with lambdas.¹  |
+| MPI_Op_create                  | :x:                | Will not be implemented because it is incompatible with lambdas.¹  |
+| MPI_Op_free                    | :x:                | Will not be implemented because it is incompatible with lambdas.¹  |
 | MPI_Open_port                  | :x:                |                                                                    |
 | MPI_Pack                       | :x:                |                                                                    |
 | MPI_Pack_external              | :x:                |                                                                    |
@@ -446,4 +446,5 @@ This is a list of the currently implemented MPI functions, and their usage with 
 | MPIX_Comm_failure_ack          | :x:                |                                                                    |
 | MPIX_Comm_failure_get_acked    | :x:                |                                                                    |
 | MPIX_Comm_revoke               | :x:                |                                                                    |
-                                     
+
+¹ The functions for creating MPI operations require a C function pointer to the user function. The given user function type however has a weird signature. Yet, a generalization where we generate a user function is not possible because C function pointers are fundamentally incompatible with lambdas.
