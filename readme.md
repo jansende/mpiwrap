@@ -435,16 +435,5 @@ This is a list of the currently implemented MPI functions, and their usage with 
 | MPI_Win_wait                   | :x:                |                                                                        |
 | MPI_Wtick                      | :x:                |                                                                        |
 | MPI_Wtime                      | :x:                |                                                                        |
-| MPIR_Type_commit               | :x:                |                                                                        |
-| MPIR_Type_contiguous           | :x:                |                                                                        |
-| MPIR_Type_dup                  | :x:                |                                                                        |
-| MPIR_Type_get_contents         | :x:                |                                                                        |
-| MPIR_Type_indexed              | :x:                |                                                                        |
-| MPIR_Type_struct               | :x:                |                                                                        |
-| MPIR_Type_vector               | :x:                |                                                                        |
-| MPIX_Comm_agree                | :x:                |                                                                        |
-| MPIX_Comm_failure_ack          | :x:                |                                                                        |
-| MPIX_Comm_failure_get_acked    | :x:                |                                                                        |
-| MPIX_Comm_revoke               | :x:                |                                                                        |
 
 ¹ MPI takes a special function signature for its operations, which is annoying to create. **mpiwrap** thus provides a proxy object (`mpi::op_proxy`) for generating this signature from a binary operation. This proxy is created by calling `mpi::make_op` with either a pure lambda or a wrapped C++ function pointer. Unfortunately due to the way C++ function pointers interact with C function pointers, we are limited to these two options. As for the MPI version, `mpi::make_op` can be provided a `commute` setting, which has a standard value of `false`.
