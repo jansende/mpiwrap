@@ -8,6 +8,7 @@
 #include <cassert>
 #include <functional>
 #include <algorithm>
+#include <mpiwrap/impl/lambda_hack.h>
 
 #ifdef BE_PARANOID
 #define paranoidly_assert(condition) assert(condition)
@@ -17,73 +18,56 @@
 
 namespace mpi
 {
-// template <class T>
-// class op_proxy
-// {
-// private:
-//     MPI_Op _operation;
-//     // const std::function<T(T, T)> _func;
-//     // const bool _commute;
-//     const std::function<void(void *, void *, int *, MPI_Datatype *)> _op;
+template <class T, class Op>
+class op_proxy
+{
+private:
+    MPI_Op _operation;
+    const bool _commute;
 
-// public:
-//     op_proxy(const op_proxy &) = delete;
-//     op_proxy(op_proxy &&) = delete;
-//     op_proxy &operator=(const op_proxy &) = delete;
+    static auto wrapper(void *void_a, void *void_b, int *len, MPI_Datatype *) -> void
+    {
+        auto a = static_cast<T *>(void_a);
+        auto b = static_cast<T *>(void_b);
+        auto op = impl::lambda_hack_impl<Op>{}.get();
+        std::transform(a, a + *len, b, b, op);
+    }
 
-//     op_proxy(const std::function<T(T, T)> &_func, const bool _commute) : _op([_func](void *p_in, void *p_inout, int *len, MPI_Datatype *) {
-//                                                                              auto in = static_cast<T *>(p_in);
-//                                                                              auto inout = static_cast<T *>(p_inout);
+public:
+    op_proxy(const op_proxy &) = delete;
+    op_proxy(op_proxy &&) = delete;
+    op_proxy &operator=(const op_proxy &) = delete;
 
-//                                                                              std::transform(in, in + *len, inout, inout, _func);
-//                                                                          })
-//     {
+    op_proxy(Op, const bool _commute) : _commute(_commute)
+    {
+        paranoidly_assert((initialized()));
+        paranoidly_assert((!finalized()));
 
-//         paranoidly_assert((initialized()));
-//         paranoidly_assert((!finalized()));
-//         // MPI_User_function* pointer = _op.target<MPI_User_function>();
-//         MPI_User_function* pointer = &_op;
-//         MPI_Op_create(pointer, _commute, &_operation);
-//     }
-//     ~op_proxy()
-//     {
-//         paranoidly_assert((initialized()));
-//         paranoidly_assert((!finalized()));
+        MPI_Op_create(op_proxy<T, Op>::wrapper, _commute, &_operation);
+    }
+    ~op_proxy()
+    {
+        paranoidly_assert((initialized()));
+        paranoidly_assert((!finalized()));
 
-//         MPI_Op_free(&_operation);
-//     }
+        MPI_Op_free(&_operation);
+    }
 
-//     auto op() const -> const MPI_Op &
-//     {
-//         return _operation;
-//     }
+    auto op() const -> const MPI_Op &
+    {
+        return _operation;
+    }
+    auto commutes() const
+    {
+        return _commute;
+    }
+};
 
-//     // auto op() const -> const MPI_Op &
-//     // {
-//     //     return _operation;
-//     // }
-// };
-
-// template <class T>
-// auto make_op(const std::function<T(T, T)> _func, const bool _commute = false) -> std::unique_ptr<op_proxy<T>>
-// {
-//     return std::make_unique<op_proxy<T>>(_func, _commute);
-// }
-// template <class T, class Result>
-// auto make_op(const std::function<std::vector<Result>(std::vector<T>, std::vector<T>)>& _operation, const bool _commute = false) -> std::unique_ptr<MPI_Op>
-// {
-
-// }
-// template <class T, class Result>
-// auto make_op(const std::function<void(void *, void *, int *, MPI_Datatype *)>& _operation, const bool _commute = false) -> std::unique_ptr<MPI_Op>
-// {
-//     //create empty operation
-//     auto _new_operation = std::make_unique<MPI_Op>();
-//     //register user function
-//     MPI_Op_create(&_operation, _commute, _new_operation.get());
-//     //return wirh deleter
-//     return std::unique_ptr<MPI_Op, std::function<void(MPI_Op*)>>(_new_operation.release(), [](auto _operation){ MPI_Op_free(_operation);});
-// }
+template <class T, class Op>
+auto make_op(Op _func, const bool _commute = false) -> std::unique_ptr<op_proxy<T, Op>>
+{
+    return std::make_unique<op_proxy<T, Op>>(_func, _commute);
+}
 
 auto initialized() -> bool
 {
@@ -252,6 +236,32 @@ public:
     auto allreduce(const char *_value, MPI_Op _operation) -> std::string
     {
         return allreduce(std::string{_value}, _operation);
+    }
+
+    template <class T, class Op>
+    auto allreduce(const T &_value, T &_bucket, const op_proxy<T, Op> *_operation) -> void
+    {
+        return allreduce(_value, _bucket, _operation->op());
+    }
+    template <class T, class Op>
+    auto allreduce(const std::vector<T> &_value, const op_proxy<T, Op> *_operation) -> std::vector<T>
+    {
+        return allreduce(_value, _operation->op());
+    }
+    template <class Op>
+    auto allreduce(const std::string &_value, const op_proxy<std::string, Op> *_operation) -> std::string
+    {
+        return allreduce(_value, _operation->op());
+    }
+    template <class T, class Op>
+    auto allreduce(const T _value, const op_proxy<T, Op> *_operation) -> T
+    {
+        return allreduce(_value, _operation->op());
+    }
+    template <class Op>
+    auto allreduce(const char *_value, const op_proxy<std::string, Op> *_operation) -> std::string
+    {
+        return allreduce(_value, _operation->op());
     }
 };
 auto comm(MPI_Comm _comm) -> std::unique_ptr<communicator>
@@ -562,6 +572,32 @@ public:
     auto reduce(const char *_value, MPI_Op _operation) -> std::string
     {
         return reduce(std::string{_value}, _operation);
+    }
+
+    template <class T, class Op>
+    auto reduce(const T &_value, T &_bucket, const op_proxy<T, Op> *_operation) -> void
+    {
+        return reduce(_value, _bucket, _operation->op());
+    }
+    template <class T, class Op>
+    auto reduce(const std::vector<T> &_value, const op_proxy<T, Op> *_operation) -> std::vector<T>
+    {
+        return reduce(_value, _operation->op());
+    }
+    template <class Op>
+    auto reduce(const std::string &_value, const op_proxy<std::string, Op> *_operation) -> std::string
+    {
+        return reduce(_value, _operation->op());
+    }
+    template <class T, class Op>
+    auto reduce(const T _value, const op_proxy<T, Op> *_operation) -> T
+    {
+        return reduce(_value, _operation->op());
+    }
+    template <class Op>
+    auto reduce(const char *_value, const op_proxy<std::string, Op> *_operation) -> std::string
+    {
+        return reduce(_value, _operation->op());
     }
 };
 
