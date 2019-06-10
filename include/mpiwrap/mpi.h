@@ -18,6 +18,27 @@
 
 namespace mpi
 {
+class version_info
+{
+private:
+    int _version;
+    int _subversion;
+
+public:
+    version_info()
+    {
+        paranoidly_assert((initialized()));
+        paranoidly_assert((!finalized()));
+
+        MPI_Get_version(&_version, &_subversion);
+    }
+    auto version() { return _version; }
+    auto subversion() { return _subversion; }
+};
+auto version()
+{
+    return version_info{};
+}
 template <class T, class Op>
 class op_proxy
 {
@@ -109,20 +130,32 @@ auto allreduce_impl(MPI_Comm _comm, const std::vector<T> &_value, std::vector<T>
 
 class communicator
 {
-private:
+protected:
     MPI_Comm _comm;
 
 public:
     communicator(MPI_Comm _comm) : _comm(_comm) {}
 
-    auto operator==(const communicator &rhs) -> bool
+    enum class comp
     {
-        return _comm == rhs._comm;
-    }
-    auto operator!=(const communicator &rhs) -> bool
-    {
-        return !(*this == rhs);
-    }
+        ident,
+        congruent,
+        similar,
+        unequal,
+    };
+    static constexpr auto ident = comp::ident;
+    static constexpr auto congruent = comp::congruent;
+    static constexpr auto similar = comp::similar;
+    static constexpr auto unequal = comp::unequal;
+
+    friend auto compare(const communicator &lhs, const MPI_Comm &rhs) -> comp;
+    friend auto compare(const MPI_Comm &lhs, const communicator &rhs) -> comp;
+    friend auto compare(const communicator &lhs, const communicator &rhs) -> comp;
+
+    auto operator==(const communicator &rhs) -> bool;
+    auto operator!=(const communicator &rhs) -> bool;
+    auto operator==(const MPI_Comm &rhs) -> bool;
+    auto operator!=(const MPI_Comm &rhs) -> bool;
 
     auto size() -> int
     {
@@ -264,6 +297,51 @@ public:
         return allreduce(_value, _operation->op());
     }
 };
+auto compare(const MPI_Comm &lhs, const MPI_Comm &rhs) -> communicator::comp
+{
+    auto _result = int{};
+    MPI_Comm_compare(lhs, rhs, &_result);
+    switch (_result)
+    {
+    case MPI_IDENT:
+        return communicator::ident;
+    case MPI_CONGRUENT:
+        return communicator::congruent;
+    case MPI_SIMILAR:
+        return communicator::similar;
+    default:
+        return communicator::unequal;
+    }
+}
+auto compare(const communicator &lhs, const MPI_Comm &rhs) -> communicator::comp
+{
+
+    return compare(lhs._comm, rhs);
+}
+auto compare(const MPI_Comm &lhs, const communicator &rhs) -> communicator::comp
+{
+    return compare(lhs, rhs._comm);
+}
+auto compare(const communicator &lhs, const communicator &rhs) -> communicator::comp
+{
+    return compare(lhs._comm, rhs._comm);
+}
+auto communicator::operator==(const communicator &rhs) -> bool
+{
+    return compare(*this, rhs) == communicator::ident;
+}
+auto communicator::operator!=(const communicator &rhs) -> bool
+{
+    return !(*this == rhs);
+}
+auto communicator::operator==(const MPI_Comm &rhs) -> bool
+{
+    return compare(*this, rhs) == communicator::ident;
+}
+auto communicator::operator!=(const MPI_Comm &rhs) -> bool
+{
+    return !(*this == rhs);
+}
 auto comm(MPI_Comm _comm) -> std::unique_ptr<communicator>
 {
     return std::make_unique<communicator>(_comm);

@@ -80,7 +80,7 @@ This is a list of the currently implemented MPI functions, and their usage with 
 | MPI_Close_port                 | :x:                |                                                                        |
 | MPI_Comm_accept                | :x:                |                                                                        |
 | MPI_Comm_call_errhandler       | :x:                |                                                                        |
-| MPI_Comm_compare               | :x:                |                                                                        |
+| MPI_Comm_compare               | :heavy_check_mark: | `mpi::compare([COMM],[COMM])`                                          |
 | MPI_Comm_connect               | :x:                |                                                                        |
 | MPI_Comm_create                | :x:                |                                                                        |
 | MPI_Comm_create_errhandler     | :x:                |                                                                        |
@@ -201,7 +201,7 @@ This is a list of the currently implemented MPI functions, and their usage with 
 | MPI_Get_elements_x             | :x:                |                                                                        |
 | MPI_Get_library_version        | :x:                |                                                                        |
 | MPI_Get_processor_name         | :heavy_check_mark: | `mpi::processor_name()`                                                |
-| MPI_Get_version                | :x:                |                                                                        |
+| MPI_Get_version                | :heavy_check_mark: | `mpi::version()` with members: `.version()` and `.subversion()`        |
 | MPI_Graph_create               | :x:                |                                                                        |
 | MPI_Graph_get                  | :x:                |                                                                        |
 | MPI_Graph_map                  | :x:                |                                                                        |
