@@ -121,6 +121,11 @@ auto allgather_impl(MPI_Comm _comm, const char *_value, std::string &_bucket) ->
 template <class T>
 auto allgather_impl(MPI_Comm _comm, const std::vector<T> &_value, std::vector<T> &_bucket) -> void;
 
+auto alltoall_impl(MPI_Comm _comm, const std::string &_value, std::string &_bucket, const size_t _chunk_size) -> void;
+auto alltoall_impl(MPI_Comm _comm, const char *_value, std::string &_bucket, const size_t _chunk_size) -> void;
+template <class T>
+auto alltoall_impl(MPI_Comm _comm, const std::vector<T> &_value, std::vector<T> &_bucket, const size_t _chunk_size) -> void;
+
 template <class T>
 auto allreduce_impl(MPI_Comm _comm, const T &_value, T &_bucket, MPI_Op _operation) -> void;
 auto allreduce_impl(MPI_Comm _comm, const std::string &_value, std::string &_bucket, MPI_Op _operation) -> void;
@@ -232,6 +237,43 @@ public:
     auto allgather(const char _value) -> std::string
     {
         return allgather(std::string{_value});
+    }
+
+    template <class T>
+    auto alltoall(const T &_value, T &_bucket, const size_t _chunk_size) -> void
+    {
+        alltoall_impl(_comm, _value, _bucket, _chunk_size);
+    }
+    template <class T>
+    auto alltoall(const T _value, std::vector<T> &_bucket, const size_t _chunk_size) -> void
+    {
+        alltoall({_value}, _bucket, _chunk_size);
+    }
+    template <class T>
+    auto alltoall(const std::vector<T> &_value, const size_t _chunk_size) -> std::vector<T>
+    {
+        auto _bucket = std::vector<T>{};
+        alltoall(_value, _bucket, _chunk_size);
+        return _bucket;
+    }
+    auto alltoall(const std::string &_value, const size_t _chunk_size) -> std::string
+    {
+        auto _bucket = std::string{};
+        alltoall(_value, _bucket, _chunk_size);
+        return _bucket;
+    }
+    template <class T>
+    auto alltoall(const T _value, const size_t _chunk_size) -> std::vector<T>
+    {
+        return alltoall(std::vector<T>{_value}, _chunk_size);
+    }
+    auto alltoall(const char *_value, const size_t _chunk_size) -> std::string
+    {
+        return alltoall(std::string{_value}, _chunk_size);
+    }
+    auto alltoall(const char _value, const size_t _chunk_size) -> std::string
+    {
+        return alltoall(std::string{_value}, _chunk_size);
     }
 
     auto barrier() -> void
@@ -724,6 +766,51 @@ auto allgather_impl(MPI_Comm _comm, const std::vector<T> &_value, std::vector<T>
     MPI_Allgather(_value.data(), _chunk_size, type_wrapper<T>{}, _bucket.data(), _chunk_size, type_wrapper<T>{}, _comm);
 }
 
+auto alltoall_impl(MPI_Comm _comm, const std::string &_value, std::string &_bucket, const size_t _chunk_size) -> void
+{
+    paranoidly_assert((initialized()));
+    paranoidly_assert((!finalized()));
+    //get current rank
+    auto _rank = comm(_comm)->rank();
+    //broadcast the size before the data is gathered
+    auto _size = (_rank == 0) ? static_cast<int>(_value.size()) : int{};
+    comm(_comm)->source(0)->bcast(_size);
+    //check size
+    assert((_value.size() == _size));
+    //double check size
+    assert((_size >= _chunk_size * comm(_comm)->size()));
+    //we need to allocate some memory for the result
+    auto _c_str = std::make_unique<char[]>(_size + 1);
+    //gather the data
+    MPI_Alltoall(_value.c_str(), _chunk_size, MPI_CHAR, _c_str.get(), _chunk_size, MPI_CHAR, _comm);
+    //we need to write the value back
+    _bucket = std::string{_c_str.get()};
+}
+auto alltoall_impl(MPI_Comm _comm, const char *_value, std::string &_bucket, const size_t _chunk_size) -> void
+{
+    alltoall_impl(_comm, std::string{_value}, _bucket, _chunk_size);
+}
+template <class T>
+auto alltoall_impl(MPI_Comm _comm, const std::vector<T> &_value, std::vector<T> &_bucket, const size_t _chunk_size) -> void
+{
+    paranoidly_assert((initialized()));
+    paranoidly_assert((!finalized()));
+    //get current rank
+    auto _rank = comm(_comm)->rank();
+    //broadcast the size before the data is gathered
+    auto _size = (_rank == 0) ? static_cast<int>(_value.size()) : int{};
+    comm(_comm)->source(0)->bcast(_size);
+    //check size
+    assert((_value.size() == _size));
+    //double check size
+    assert((_size >= _chunk_size * comm(_comm)->size()));
+    //resize bucket to take all elements
+    if (_size != _bucket.size())
+        _bucket.resize(_size);
+    //gather the data
+    MPI_Alltoall(_value.data(), _chunk_size, type_wrapper<T>{}, _bucket.data(), _chunk_size, type_wrapper<T>{}, _comm);
+}
+
 template <class T>
 auto allreduce_impl(MPI_Comm _comm, const T &_value, T &_bucket, MPI_Op _operation) -> void
 {
@@ -789,7 +876,7 @@ auto recv_impl(int _source, int _tag, MPI_Comm _comm, MPI_Status *_status, std::
     auto _size = int{};
     MPI_Get_count(_status, MPI_CHAR, &_size);
     //we need to allocate some memory for it
-    auto _c_str = std::make_unique<char[]>(_size);
+    auto _c_str = std::make_unique<char[]>(_size + 1);
     //we need to receive it
     MPI_Recv(_c_str.get(), _size, MPI_CHAR, _source, _tag, _comm, _status);
     //we need to write the value back
@@ -824,10 +911,10 @@ auto bcast_impl(int _source, MPI_Comm _comm, std::string &_value) -> void
     //get current rank
     auto _rank = comm(_comm)->rank();
     //broadcast the size before the string
-    auto _size = (_rank == _source) ? static_cast<int>(_value.size()) + 1 : int{};
+    auto _size = (_rank == _source) ? static_cast<int>(_value.size()) : int{};
     comm(_comm)->source(_source)->bcast(_size);
     //we need to allocate some memory for it
-    auto _c_str = std::make_unique<char[]>(_size);
+    auto _c_str = std::make_unique<char[]>(_size + 1);
     //we need to copy the data into the right place
     if (_rank == _source)
         std::strcpy(_c_str.get(), _value.c_str());
@@ -866,7 +953,7 @@ auto scatter_impl(int _source, MPI_Comm _comm, const std::string &_value, const 
     //create result container
     auto _chunk = std::make_unique<char[]>(_chunk_size + 1);
     //scatter the data
-    MPI_Scatter(_c_str.get(), _chunk_size, MPI_CHAR, _chunk.get(), _chunk_size + 1, MPI_CHAR, _source, _comm);
+    MPI_Scatter(_c_str.get(), _chunk_size, MPI_CHAR, _chunk.get(), _chunk_size, MPI_CHAR, _source, _comm);
     //at we need to write the value back
     return std::string{_chunk.get()};
 }
@@ -893,7 +980,7 @@ auto send_impl(int _dest, int _tag, MPI_Comm _comm, const std::string &_value) -
 {
     paranoidly_assert((initialized()));
     paranoidly_assert((!finalized()));
-    MPI_Send(_value.c_str(), _value.size() + 1, MPI_CHAR, _dest, _tag, _comm);
+    MPI_Send(_value.c_str(), _value.size(), MPI_CHAR, _dest, _tag, _comm);
 }
 auto send_impl(int _dest, int _tag, MPI_Comm _comm, const char *_value) -> void
 {
@@ -919,7 +1006,7 @@ auto ssend_impl(int _dest, int _tag, MPI_Comm _comm, const std::string &_value) 
 {
     paranoidly_assert((initialized()));
     paranoidly_assert((!finalized()));
-    MPI_Ssend(_value.c_str(), _value.size() + 1, MPI_CHAR, _dest, _tag, _comm);
+    MPI_Ssend(_value.c_str(), _value.size(), MPI_CHAR, _dest, _tag, _comm);
 }
 auto ssend_impl(int _dest, int _tag, MPI_Comm _comm, const char *_value) -> void
 {
@@ -943,7 +1030,7 @@ auto rsend_impl(int _dest, int _tag, MPI_Comm _comm, const std::string &_value) 
 {
     paranoidly_assert((initialized()));
     paranoidly_assert((!finalized()));
-    MPI_Rsend(_value.c_str(), _value.size() + 1, MPI_CHAR, _dest, _tag, _comm);
+    MPI_Rsend(_value.c_str(), _value.size(), MPI_CHAR, _dest, _tag, _comm);
 }
 auto rsend_impl(int _dest, int _tag, MPI_Comm _comm, const char *_value) -> void
 {
@@ -1057,6 +1144,65 @@ auto reduce_impl(int _dest, MPI_Comm _comm, const std::vector<T> &_value, std::v
     }
     //reduce the data
     MPI_Reduce(_value.data(), _bucket.data(), _size, type_wrapper<T>{}, _operation, _dest, _comm);
+}
+
+template <class T>
+auto reduce(const T &_value, T &_bucket, MPI_Op _operation) -> void
+{
+    paranoidly_assert((initialized()));
+    paranoidly_assert((!finalized()));
+    //reduce the data
+    MPI_Reduce_local(&_value, &_bucket, 1, type_wrapper<T>{}, _operation);
+}
+auto reduce(const std::string &_value, std::string &_bucket, MPI_Op _operation) -> void
+{
+    paranoidly_assert((initialized()));
+    paranoidly_assert((!finalized()));
+    //we need to allocate some memory for the result
+    auto _c_str = std::make_unique<char[]>(_value.size() + 1);
+    //reduce the data
+    MPI_Reduce_local(_value.c_str(), _c_str.get(), _value.size(), MPI_CHAR, _operation);
+    //we need to write the value back
+    _bucket = std::string{_c_str.get()};
+}
+auto reduce(const char *_value, std::string &_bucket, MPI_Op _operation) -> void
+{
+    reduce(std::string{_value}, _bucket, _operation);
+}
+template <class T>
+auto reduce(const std::vector<T> &_value, std::vector<T> &_bucket, MPI_Op _operation) -> void
+{
+    paranoidly_assert((initialized()));
+    paranoidly_assert((!finalized()));
+    //resize bucket to take all elements
+    if (_value.size() != _bucket.size())
+        _bucket.resize(_value.size());
+    //reduce the data
+    MPI_Reduce_local(_value.data(), _bucket.data(), _value.size(), type_wrapper<T>{}, _operation);
+}
+template <class T>
+auto reduce(const std::vector<T> &_value, MPI_Op _operation) -> std::vector<T>
+{
+    auto _bucket = std::vector<T>{};
+    reduce(_value, _bucket, _operation);
+    return _bucket;
+}
+auto reduce(const std::string &_value, MPI_Op _operation) -> std::string
+{
+    auto _bucket = std::string{};
+    reduce(_value, _bucket, _operation);
+    return _bucket;
+}
+template <class T>
+auto reduce(const T _value, MPI_Op _operation) -> T
+{
+    auto _bucket = T{};
+    reduce(_value, _bucket, _operation);
+    return _bucket;
+}
+auto reduce(const char *_value, MPI_Op _operation) -> std::string
+{
+    return reduce(std::string{_value}, _operation);
 }
 
 } // namespace mpi
