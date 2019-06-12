@@ -10,29 +10,29 @@ project(mpiwrap VERSION 0.1.0
                 DESCRIPTION "mpiwrap is a C++ wrapper for the horrible C interface of MPI libraries."
                 LANGUAGES CXX)
 
-#add library interface
-add_library(mpiwrap INTERFACE)
+#add library
+add_library(mpiwrap src/mpi.cpp)
 #add header files
-target_include_directories(mpiwrap INTERFACE ${CMAKE_CURRENT_SOURCE_DIR}/include)
+target_include_directories(mpiwrap PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/include)
 
 #add mpi
 find_package(MPI REQUIRED)
 #fix for cmake <3.9 --> https://cliutils.gitlab.io/modern-cmake/chapters/packages/MPI.html
 if(NOT TARGET MPI::MPI_CXX)
-    add_library(MPI::MPI_CXX IMPORTED INTERFACE)
+    add_library(MPI::MPI_CXX IMPORTED PUBLIC)
     set_property(TARGET MPI::MPI_CXX PROPERTY INTERFACE_COMPILE_OPTIONS ${MPI_CXX_COMPILE_FLAGS})
     set_property(TARGET MPI::MPI_CXX PROPERTY INTERFACE_INCLUDE_DIRECTORIES ${MPI_CXX_INCLUDE_PATH})
     set_property(TARGET MPI::MPI_CXX PROPERTY INTERFACE_LINK_LIBRARIES ${MPI_CXX_LINK_FLAGS} ${MPI_CXX_LIBRARIES})
 endif()
 #add mpi link
-target_link_libraries(mpiwrap INTERFACE MPI::MPI_CXX)
+target_link_libraries(mpiwrap PUBLIC MPI::MPI_CXX)
 #add additional build options
 option(MPIWRAP_EXAMPLES_ENABLED "Build examples" OFF)
 option(MPIWRAP_PARANOID_ASSERTIONS "Use paranoid assertions" OFF)
 
 #enter paranoia
 if (MPIWRAP_PARANOID_ASSERTIONS)
-    target_compile_definitions(mpiwrap INTERFACE BE_PARANOID)
+    target_compile_definitions(mpiwrap PUBLIC BE_PARANOID)
 endif()
 
 #add examples
