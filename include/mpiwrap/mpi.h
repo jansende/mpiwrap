@@ -192,50 +192,72 @@ public:
     auto source(int _source) -> std::unique_ptr<receiver>;
 
     template <class T>
-    auto allgather(const T &_value, T &_bucket) -> void;
+    auto allgather(const T &_value, std::vector<T> &_bucket) -> void;
     template <class T>
-    auto allgather(const T _value, std::vector<T> &_bucket) -> void;
+    auto allgather(const std::vector<T> &_value, std::vector<T> &_bucket) -> void;
+    auto allgather(const char _value, std::string &_bucket) -> void;
+    auto allgather(const char *_value, std::string &_bucket) -> void;
+    auto allgather(const std::string &_value, std::string &_bucket) -> void;
+    template <class T>
+    auto allgather(const T &_value) -> std::vector<T>;
     template <class T>
     auto allgather(const std::vector<T> &_value) -> std::vector<T>;
-    auto allgather(const std::string &_value) -> std::string;
-    template <class T>
-    auto allgather(const T _value) -> std::vector<T>;
-    auto allgather(const char *_value) -> std::string;
     auto allgather(const char _value) -> std::string;
+    auto allgather(const char *_value) -> std::string;
+    auto allgather(const std::string &_value) -> std::string;
 
     template <class T>
-    auto alltoall(const T &_value, T &_bucket, const size_t _chunk_size) -> void;
+    auto alltoall(const T &_value, std::vector<T> &_bucket, const size_t _chunk_size) -> void;
     template <class T>
-    auto alltoall(const T _value, std::vector<T> &_bucket, const size_t _chunk_size) -> void;
+    auto alltoall(const std::vector<T> &_value, std::vector<T> &_bucket, const size_t _chunk_size) -> void;
+    auto alltoall(const char _value, std::string &_bucket, const size_t _chunk_size) -> void;
+    auto alltoall(const char *_value, std::string &_bucket, const size_t _chunk_size) -> void;
+    auto alltoall(const std::string &_value, std::string &_bucket, const size_t _chunk_size) -> void;
+    template <class T>
+    auto alltoall(const T &_value, const size_t _chunk_size) -> std::vector<T>;
     template <class T>
     auto alltoall(const std::vector<T> &_value, const size_t _chunk_size) -> std::vector<T>;
-    auto alltoall(const std::string &_value, const size_t _chunk_size) -> std::string;
-    template <class T>
-    auto alltoall(const T _value, const size_t _chunk_size) -> std::vector<T>;
-    auto alltoall(const char *_value, const size_t _chunk_size) -> std::string;
     auto alltoall(const char _value, const size_t _chunk_size) -> std::string;
+    auto alltoall(const char *_value, const size_t _chunk_size) -> std::string;
+    auto alltoall(const std::string &_value, const size_t _chunk_size) -> std::string;
 
     auto barrier() -> void;
 
     template <class T>
     auto allreduce(const T &_value, T &_bucket, MPI_Op _operation) -> void;
     template <class T>
-    auto allreduce(const std::vector<T> &_value, MPI_Op _operation) -> std::vector<T>;
-    auto allreduce(const std::string &_value, MPI_Op _operation) -> std::string;
+    auto allreduce(const std::vector<T> &_value, std::vector<T> &_bucket, MPI_Op _operation) -> void;
+    auto allreduce(const char _value, std::string &_bucket, MPI_Op _operation) -> void;
+    auto allreduce(const char *_value, std::string &_bucket, MPI_Op _operation) -> void;
+    auto allreduce(const std::string &_value, std::string &_bucket, MPI_Op _operation) -> void;
     template <class T>
-    auto allreduce(const T _value, MPI_Op _operation) -> T;
+    auto allreduce(const T &_value, MPI_Op _operation) -> T;
+    template <class T>
+    auto allreduce(const std::vector<T> &_value, MPI_Op _operation) -> std::vector<T>;
+    auto allreduce(const char _value, MPI_Op _operation) -> std::string;
     auto allreduce(const char *_value, MPI_Op _operation) -> std::string;
+    auto allreduce(const std::string &_value, MPI_Op _operation) -> std::string;
 
     template <class T, class Op>
     auto allreduce(const T &_value, T &_bucket, const op_proxy<T, Op> *_operation) -> void;
     template <class T, class Op>
+    auto allreduce(const std::vector<T> &_value, std::vector<T> &_bucket, const op_proxy<T, Op> *_operation) -> void;
+    template <class Op>
+    auto allreduce(const char _value, std::string &_bucket, const op_proxy<std::string, Op> *_operation) -> void;
+    template <class Op>
+    auto allreduce(const char *_value, std::string &_bucket, const op_proxy<std::string, Op> *_operation) -> void;
+    template <class Op>
+    auto allreduce(const std::string &_value, std::string &_bucket, const op_proxy<std::string, Op> *_operation) -> void;
+    template <class T, class Op>
+    auto allreduce(const T &_value, const op_proxy<T, Op> *_operation) -> T;
+    template <class T, class Op>
     auto allreduce(const std::vector<T> &_value, const op_proxy<T, Op> *_operation) -> std::vector<T>;
     template <class Op>
-    auto allreduce(const std::string &_value, const op_proxy<std::string, Op> *_operation) -> std::string;
-    template <class T, class Op>
-    auto allreduce(const T _value, const op_proxy<T, Op> *_operation) -> T;
+    auto allreduce(const char _value, const op_proxy<std::string, Op> *_operation) -> std::string;
     template <class Op>
     auto allreduce(const char *_value, const op_proxy<std::string, Op> *_operation) -> std::string;
+    template <class Op>
+    auto allreduce(const std::string &_value, const op_proxy<std::string, Op> *_operation) -> std::string;
 };
 #pragma endregion
 #pragma region MPI compare
@@ -263,43 +285,77 @@ public:
     auto operator!=(const sender &rhs) -> bool;
 
     template <class T>
-    auto send(const T _value) -> void;
+    auto send(const T &_value) -> void;
     template <class T>
-    auto ssend(const T _value) -> void;
+    auto send(const std::vector<T> &_value) -> void;
+    auto send(const char _value) -> void;
+    auto send(const char *_value) -> void;
+    auto send(const std::string &_value) -> void;
     template <class T>
-    auto rsend(const T _value) -> void;
+    auto ssend(const T &_value) -> void;
+    template <class T>
+    auto ssend(const std::vector<T> &_value) -> void;
+    auto ssend(const char _value) -> void;
+    auto ssend(const char *_value) -> void;
+    auto ssend(const std::string &_value) -> void;
+    template <class T>
+    auto rsend(const T &_value) -> void;
+    template <class T>
+    auto rsend(const std::vector<T> &_value) -> void;
+    auto rsend(const char _value) -> void;
+    auto rsend(const char *_value) -> void;
+    auto rsend(const std::string &_value) -> void;
 
     template <class T>
-    auto gather(const T &_value, T &_bucket) -> void;
+    auto gather(const T &_value, std::vector<T> &_bucket) -> void;
     template <class T>
-    auto gather(const T _value, std::vector<T> &_bucket) -> void;
+    auto gather(const std::vector<T> &_value, std::vector<T> &_bucket) -> void;
+    auto gather(const char _value, std::string &_bucket) -> void;
+    auto gather(const char *_value, std::string &_bucket) -> void;
+    auto gather(const std::string &_value, std::string &_bucket) -> void;
+    template <class T>
+    auto gather(const T &_value) -> std::vector<T>;
     template <class T>
     auto gather(const std::vector<T> &_value) -> std::vector<T>;
-    auto gather(const std::string &_value) -> std::string;
-    template <class T>
-    auto gather(const T _value) -> std::vector<T>;
-    auto gather(const char *_value) -> std::string;
     auto gather(const char _value) -> std::string;
+    auto gather(const char *_value) -> std::string;
+    auto gather(const std::string &_value) -> std::string;
 
     template <class T>
     auto reduce(const T &_value, T &_bucket, MPI_Op _operation) -> void;
     template <class T>
-    auto reduce(const std::vector<T> &_value, MPI_Op _operation) -> std::vector<T>;
-    auto reduce(const std::string &_value, MPI_Op _operation) -> std::string;
+    auto reduce(const std::vector<T> &_value, std::vector<T> &_bucket, MPI_Op _operation) -> void;
+    auto reduce(const char _value, std::string &_bucket, MPI_Op _operation) -> void;
+    auto reduce(const char *_value, std::string &_bucket, MPI_Op _operation) -> void;
+    auto reduce(const std::string &_value, std::string &_bucket, MPI_Op _operation) -> void;
     template <class T>
-    auto reduce(const T _value, MPI_Op _operation) -> T;
+    auto reduce(const T &_value, MPI_Op _operation) -> T;
+    template <class T>
+    auto reduce(const std::vector<T> &_value, MPI_Op _operation) -> std::vector<T>;
+    auto reduce(const char _value, MPI_Op _operation) -> std::string;
     auto reduce(const char *_value, MPI_Op _operation) -> std::string;
+    auto reduce(const std::string &_value, MPI_Op _operation) -> std::string;
 
     template <class T, class Op>
     auto reduce(const T &_value, T &_bucket, const op_proxy<T, Op> *_operation) -> void;
     template <class T, class Op>
+    auto reduce(const std::vector<T> &_value, std::vector<T> &_bucket, const op_proxy<T, Op> *_operation) -> void;
+    template <class Op>
+    auto reduce(const char _value, std::string &_bucket, const op_proxy<std::string, Op> *_operation) -> void;
+    template <class Op>
+    auto reduce(const char *_value, std::string &_bucket, const op_proxy<std::string, Op> *_operation) -> void;
+    template <class Op>
+    auto reduce(const std::string &_value, std::string &_bucket, const op_proxy<std::string, Op> *_operation) -> void;
+    template <class T, class Op>
+    auto reduce(const T &_value, const op_proxy<T, Op> *_operation) -> T;
+    template <class T, class Op>
     auto reduce(const std::vector<T> &_value, const op_proxy<T, Op> *_operation) -> std::vector<T>;
     template <class Op>
-    auto reduce(const std::string &_value, const op_proxy<std::string, Op> *_operation) -> std::string;
-    template <class T, class Op>
-    auto reduce(const T _value, const op_proxy<T, Op> *_operation) -> T;
+    auto reduce(const char _value, const op_proxy<std::string, Op> *_operation) -> std::string;
     template <class Op>
     auto reduce(const char *_value, const op_proxy<std::string, Op> *_operation) -> std::string;
+    template <class Op>
+    auto reduce(const std::string &_value, const op_proxy<std::string, Op> *_operation) -> std::string;
 };
 #pragma endregion
 #pragma region MPI receiver
@@ -318,15 +374,31 @@ public:
     auto operator!=(const receiver &rhs) -> bool;
 
     template <class T>
-    auto recv() -> T;
-    template <class T>
     auto recv(T &_value) -> void;
+    template <class T>
+    auto recv() -> T;
 
     template <class T>
     auto bcast(T &_value) -> void;
+    template <class R, class T>
+    auto bcast(const T &_value) -> std::enable_if_t<std::is_same<R, T>::value, T>;
+    template <class R, class T>
+    auto bcast(const std::vector<T> &_value) -> std::enable_if_t<std::is_same<R, std::vector<T>>::value, std::vector<T>>;
+    template <class R>
+    auto bcast(const char _value) -> std::enable_if_t<std::is_same<R, std::string>::value, std::string>;
+    template <class R>
+    auto bcast(const char *_value) -> std::enable_if_t<std::is_same<R, std::string>::value, std::string>;
+    template <class R>
+    auto bcast(const std::string &_value) -> std::enable_if_t<std::is_same<R, std::string>::value, std::string>;
 
     template <class T>
-    auto scatter(T &_value, const size_t _chunk_size) -> T;
+    auto scatter(const std::vector<T> &_value, std::vector<T> &_bucket, const size_t _chunk_size) -> void;
+    auto scatter(const char *_value, std::string &_bucket, const size_t _chunk_size) -> void;
+    auto scatter(const std::string &_value, std::string &_bucket, const size_t _chunk_size) -> void;
+    template <class T>
+    auto scatter(const std::vector<T> &_value, const size_t _chunk_size) -> std::vector<T>;
+    auto scatter(const char *_value, const size_t _chunk_size) -> std::string;
+    auto scatter(const std::string &_value, const size_t _chunk_size) -> std::string;
 };
 #pragma endregion
 } // namespace mpi

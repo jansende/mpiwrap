@@ -220,7 +220,7 @@ auto allgather_impl(MPI_Comm _comm, const char *_value, std::string &_bucket) ->
 }
 #pragma endregion
 #pragma region MPI scatter
-auto scatter_impl(int _source, MPI_Comm _comm, const std::string &_value, const size_t _chunk_size) -> std::string
+auto scatter_impl(int _source, MPI_Comm _comm, const std::string &_value, std::string &_bucket, const size_t _chunk_size) -> void
 {
     paranoidly_assert((initialized()));
     paranoidly_assert((!finalized()));
@@ -235,7 +235,7 @@ auto scatter_impl(int _source, MPI_Comm _comm, const std::string &_value, const 
     //scatter the data
     MPI_Scatter(_c_str.get(), _chunk_size, MPI_CHAR, _chunk.get(), _chunk_size, MPI_CHAR, _source, _comm);
     //at we need to write the value back
-    return std::string{_chunk.get()};
+    _bucket = std::string{_chunk.get()};
 }
 #pragma endregion
 #pragma region MPI send
@@ -358,6 +358,26 @@ auto communicator::source(int _source) -> std::unique_ptr<receiver>
     return std::make_unique<receiver>(_source, _tag, _comm);
 }
 
+auto communicator::allgather(const char _value, std::string &_bucket) -> void
+{
+    return allgather(std::string{_value}, _bucket);
+}
+auto communicator::allgather(const char *_value, std::string &_bucket) -> void
+{
+    return allgather(std::string{_value}, _bucket);
+}
+auto communicator::allgather(const std::string &_value, std::string &_bucket) -> void
+{
+    return allgather_impl(_comm, _value, _bucket);
+}
+auto communicator::allgather(const char _value) -> std::string
+{
+    return allgather(std::string{_value});
+}
+auto communicator::allgather(const char *_value) -> std::string
+{
+    return allgather(std::string{_value});
+}
 auto communicator::allgather(const std::string &_value) -> std::string
 {
     auto _bucket = std::string{};
@@ -365,29 +385,31 @@ auto communicator::allgather(const std::string &_value) -> std::string
     return _bucket;
 }
 
-auto communicator::allgather(const char *_value) -> std::string
+auto communicator::alltoall(const char _value, std::string &_bucket, const size_t _chunk_size) -> void
 {
-    return allgather(std::string{_value});
+    return alltoall(std::string{_value}, _bucket, _chunk_size);
 }
-auto communicator::allgather(const char _value) -> std::string
+auto communicator::alltoall(const char *_value, std::string &_bucket, const size_t _chunk_size) -> void
 {
-    return allgather(std::string{_value});
+    return alltoall(std::string{_value}, _bucket, _chunk_size);
 }
-
+auto communicator::alltoall(const std::string &_value, std::string &_bucket, const size_t _chunk_size) -> void
+{
+    return alltoall_impl(_comm, _value, _bucket, _chunk_size);
+}
+auto communicator::alltoall(const char _value, const size_t _chunk_size) -> std::string
+{
+    return alltoall(std::string{_value}, _chunk_size);
+}
+auto communicator::alltoall(const char *_value, const size_t _chunk_size) -> std::string
+{
+    return alltoall(std::string{_value}, _chunk_size);
+}
 auto communicator::alltoall(const std::string &_value, const size_t _chunk_size) -> std::string
 {
     auto _bucket = std::string{};
     alltoall(_value, _bucket, _chunk_size);
     return _bucket;
-}
-
-auto communicator::alltoall(const char *_value, const size_t _chunk_size) -> std::string
-{
-    return alltoall(std::string{_value}, _chunk_size);
-}
-auto communicator::alltoall(const char _value, const size_t _chunk_size) -> std::string
-{
-    return alltoall(std::string{_value}, _chunk_size);
 }
 
 auto communicator::barrier() -> void
@@ -397,16 +419,31 @@ auto communicator::barrier() -> void
     MPI_Barrier(_comm);
 }
 
+auto communicator::allreduce(const char _value, std::string &_bucket, MPI_Op _operation) -> void
+{
+    return allreduce(std::string{_value}, _bucket, _operation);
+}
+auto communicator::allreduce(const char *_value, std::string &_bucket, MPI_Op _operation) -> void
+{
+    return allreduce(std::string{_value}, _bucket, _operation);
+}
+auto communicator::allreduce(const std::string &_value, std::string &_bucket, MPI_Op _operation) -> void
+{
+    return allreduce_impl(_comm, _value, _bucket, _operation);
+}
+auto communicator::allreduce(const char _value, MPI_Op _operation) -> std::string
+{
+    return allreduce(std::string{_value}, _operation);
+}
+auto communicator::allreduce(const char *_value, MPI_Op _operation) -> std::string
+{
+    return allreduce(std::string{_value}, _operation);
+}
 auto communicator::allreduce(const std::string &_value, MPI_Op _operation) -> std::string
 {
     auto _bucket = std::string{};
     allreduce(_value, _bucket, _operation);
     return _bucket;
-}
-
-auto communicator::allreduce(const char *_value, MPI_Op _operation) -> std::string
-{
-    return allreduce(std::string{_value}, _operation);
 }
 #pragma endregion
 #pragma region MPI compare
@@ -482,30 +519,95 @@ auto sender::operator!=(const sender &rhs) -> bool
     return !(*this == rhs);
 }
 
+auto sender::send(const char _value) -> void
+{
+    return send(std::string{_value});
+}
+auto sender::send(const char *_value) -> void
+{
+    return send(std::string{_value});
+}
+auto sender::send(const std::string &_value) -> void
+{
+    return send_impl(_dest, _tag, _comm, _value);
+}
+auto sender::ssend(const char _value) -> void
+{
+    return ssend(std::string{_value});
+}
+auto sender::ssend(const char *_value) -> void
+{
+    return ssend(std::string{_value});
+}
+auto sender::ssend(const std::string &_value) -> void
+{
+    return ssend_impl(_dest, _tag, _comm, _value);
+}
+auto sender::rsend(const char _value) -> void
+{
+    return rsend(std::string{_value});
+}
+auto sender::rsend(const char *_value) -> void
+{
+    return rsend(std::string{_value});
+}
+auto sender::rsend(const std::string &_value) -> void
+{
+    return rsend_impl(_dest, _tag, _comm, _value);
+}
+
+auto sender::gather(const char _value, std::string &_bucket) -> void
+{
+    return gather(std::string{_value}, _bucket);
+}
+auto sender::gather(const char *_value, std::string &_bucket) -> void
+{
+    return gather(std::string{_value}, _bucket);
+}
+auto sender::gather(const std::string &_value, std::string &_bucket) -> void
+{
+    return gather_impl(_dest, _comm, _value, _bucket);
+}
+auto sender::gather(const char _value) -> std::string
+{
+    return gather(std::string{_value});
+}
+auto sender::gather(const char *_value) -> std::string
+{
+    return gather(std::string{_value});
+}
 auto sender::gather(const std::string &_value) -> std::string
 {
     auto _bucket = std::string{};
     gather(_value, _bucket);
     return _bucket;
 }
-auto sender::gather(const char *_value) -> std::string
-{
-    return gather(std::string{_value});
-}
-auto sender::gather(const char _value) -> std::string
-{
-    return gather(std::string{_value});
-}
 
+auto sender::reduce(const char _value, std::string &_bucket, MPI_Op _operation) -> void
+{
+    return reduce(std::string{_value}, _bucket, _operation);
+}
+auto sender::reduce(const char *_value, std::string &_bucket, MPI_Op _operation) -> void
+{
+    return reduce(std::string{_value}, _bucket, _operation);
+}
+auto sender::reduce(const std::string &_value, std::string &_bucket, MPI_Op _operation) -> void
+{
+    return reduce_impl(_dest, _comm, _value, _bucket, _operation);
+}
+auto sender::reduce(const char _value, MPI_Op _operation) -> std::string
+{
+    return reduce(std::string{_value}, _operation);
+}
+auto sender::reduce(const char *_value, MPI_Op _operation) -> std::string
+{
+    return reduce(std::string{_value}, _operation);
+}
 auto sender::reduce(const std::string &_value, MPI_Op _operation) -> std::string
 {
     auto _bucket = std::string{};
     reduce(_value, _bucket, _operation);
     return _bucket;
-}
-auto sender::reduce(const char *_value, MPI_Op _operation) -> std::string
-{
-    return reduce(std::string{_value}, _operation);
 }
 #pragma endregion
 #pragma region MPI receiver
@@ -520,6 +622,25 @@ auto receiver::operator==(const receiver &rhs) -> bool
 auto receiver::operator!=(const receiver &rhs) -> bool
 {
     return !(*this == rhs);
+}
+
+auto receiver::scatter(const char *_value, std::string &_bucket, const size_t _chunk_size) -> void
+{
+    return scatter(std::string{_value}, _bucket, _chunk_size);
+}
+auto receiver::scatter(const std::string &_value, std::string &_bucket, const size_t _chunk_size) -> void
+{
+    return scatter_impl(_source, _comm, _value, _bucket, _chunk_size);
+}
+auto receiver::scatter(const char *_value, const size_t _chunk_size) -> std::string
+{
+    return scatter(std::string{_value}, _chunk_size);
+}
+auto receiver::scatter(const std::string &_value, const size_t _chunk_size) -> std::string
+{
+    auto _bucket = std::string{};
+    scatter(_value, _bucket, _chunk_size);
+    return _bucket;
 }
 #pragma endregion
 } // namespace mpi

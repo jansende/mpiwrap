@@ -239,18 +239,18 @@ auto allgather_impl(MPI_Comm _comm, const std::vector<T> &_value, std::vector<T>
 #pragma endregion
 #pragma region MPI scatter
 //declarations
-auto scatter_impl(int _source, MPI_Comm _comm, const std::string &_value, const size_t _chunk_size) -> std::string;
+auto scatter_impl(int _source, MPI_Comm _comm, const std::string &_value, std::string &_bucket, const size_t _chunk_size) -> void;
 //templates
 template <class T>
-auto scatter_impl(int _source, MPI_Comm _comm, const std::vector<T> &_value, const size_t _chunk_size) -> std::vector<T>
+auto scatter_impl(int _source, MPI_Comm _comm, const std::vector<T> &_value, std::vector<T> &_bucket, const size_t _chunk_size) -> void
 {
     paranoidly_assert((initialized()));
     paranoidly_assert((!finalized()));
-    //create result container
-    auto _chunk = std::vector<T>(_chunk_size);
+    //resize bucket to take all elements
+    if (_chunk_size != _bucket.size())
+        _bucket.resize(_chunk_size);
     //scatter the data
-    MPI_Scatter(_value.data(), _chunk_size, type_wrapper<T>{}, _chunk.data(), _chunk_size, type_wrapper<T>{}, _source, _comm);
-    return _chunk;
+    MPI_Scatter(_value.data(), _chunk_size, type_wrapper<T>{}, _bucket.data(), _chunk_size, type_wrapper<T>{}, _source, _comm);
 }
 #pragma endregion
 #pragma region MPI send
@@ -411,14 +411,19 @@ auto make_op(Op _func, const bool _commute) -> std::unique_ptr<op_proxy<T, Op>>
 #pragma endregion
 #pragma region MPI communicator
 template <class T>
-auto communicator::allgather(const T &_value, T &_bucket) -> void
+auto communicator::allgather(const T &_value, std::vector<T> &_bucket) -> void
 {
-    allgather_impl(_comm, _value, _bucket);
+    return allgather(std::vector<T>{_value}, _bucket);
 }
 template <class T>
-auto communicator::allgather(const T _value, std::vector<T> &_bucket) -> void
+auto communicator::allgather(const std::vector<T> &_value, std::vector<T> &_bucket) -> void
 {
-    allgather({_value}, _bucket);
+    return allgather_impl(_comm, _value, _bucket);
+}
+template <class T>
+auto communicator::allgather(const T &_value) -> std::vector<T>
+{
+    return allgather(std::vector<T>{_value});
 }
 template <class T>
 auto communicator::allgather(const std::vector<T> &_value) -> std::vector<T>
@@ -429,20 +434,19 @@ auto communicator::allgather(const std::vector<T> &_value) -> std::vector<T>
 }
 
 template <class T>
-auto communicator::allgather(const T _value) -> std::vector<T>
+auto communicator::alltoall(const T &_value, std::vector<T> &_bucket, const size_t _chunk_size) -> void
 {
-    return allgather(std::vector<T>{_value});
-}
-
-template <class T>
-auto communicator::alltoall(const T &_value, T &_bucket, const size_t _chunk_size) -> void
-{
-    alltoall_impl(_comm, _value, _bucket, _chunk_size);
+    return alltoall(std::vector<T>{_value}, _bucket, _chunk_size);
 }
 template <class T>
-auto communicator::alltoall(const T _value, std::vector<T> &_bucket, const size_t _chunk_size) -> void
+auto communicator::alltoall(const std::vector<T> &_value, std::vector<T> &_bucket, const size_t _chunk_size) -> void
 {
-    alltoall({_value}, _bucket, _chunk_size);
+    return alltoall_impl(_comm, _value, _bucket, _chunk_size);
+}
+template <class T>
+auto communicator::alltoall(const T &_value, const size_t _chunk_size) -> std::vector<T>
+{
+    return alltoall(std::vector<T>{_value}, _chunk_size);
 }
 template <class T>
 auto communicator::alltoall(const std::vector<T> &_value, const size_t _chunk_size) -> std::vector<T>
@@ -453,28 +457,26 @@ auto communicator::alltoall(const std::vector<T> &_value, const size_t _chunk_si
 }
 
 template <class T>
-auto communicator::alltoall(const T _value, const size_t _chunk_size) -> std::vector<T>
-{
-    return alltoall(std::vector<T>{_value}, _chunk_size);
-}
-
-template <class T>
 auto communicator::allreduce(const T &_value, T &_bucket, MPI_Op _operation) -> void
 {
-    allreduce_impl(_comm, _value, _bucket, _operation);
+    return allreduce_impl(_comm, _value, _bucket, _operation);
+}
+template <class T>
+auto communicator::allreduce(const std::vector<T> &_value, std::vector<T> &_bucket, MPI_Op _operation) -> void
+{
+    return allreduce_impl(_comm, _value, _bucket, _operation);
+}
+template <class T>
+auto communicator::allreduce(const T &_value, MPI_Op _operation) -> T
+{
+    auto _bucket = T{};
+    allreduce(_value, _bucket, _operation);
+    return _bucket;
 }
 template <class T>
 auto communicator::allreduce(const std::vector<T> &_value, MPI_Op _operation) -> std::vector<T>
 {
     auto _bucket = std::vector<T>{};
-    allreduce(_value, _bucket, _operation);
-    return _bucket;
-}
-
-template <class T>
-auto communicator::allreduce(const T _value, MPI_Op _operation) -> T
-{
-    auto _bucket = T{};
     allreduce(_value, _bucket, _operation);
     return _bucket;
 }
@@ -485,17 +487,37 @@ auto communicator::allreduce(const T &_value, T &_bucket, const op_proxy<T, Op> 
     return allreduce(_value, _bucket, _operation->op());
 }
 template <class T, class Op>
+auto communicator::allreduce(const std::vector<T> &_value, std::vector<T> &_bucket, const op_proxy<T, Op> *_operation) -> void
+{
+    return allreduce(_value, _bucket, _operation->op());
+}
+template <class Op>
+auto communicator::allreduce(const char _value, std::string &_bucket, const op_proxy<std::string, Op> *_operation) -> void
+{
+    return allreduce(_value, _bucket, _operation->op());
+}
+template <class Op>
+auto communicator::allreduce(const char *_value, std::string &_bucket, const op_proxy<std::string, Op> *_operation) -> void
+{
+    return allreduce(_value, _bucket, _operation->op());
+}
+template <class Op>
+auto communicator::allreduce(const std::string &_value, std::string &_bucket, const op_proxy<std::string, Op> *_operation) -> void
+{
+    return allreduce(_value, _bucket, _operation->op());
+}
+template <class T, class Op>
+auto communicator::allreduce(const T &_value, const op_proxy<T, Op> *_operation) -> T
+{
+    return allreduce(_value, _operation->op());
+}
+template <class T, class Op>
 auto communicator::allreduce(const std::vector<T> &_value, const op_proxy<T, Op> *_operation) -> std::vector<T>
 {
     return allreduce(_value, _operation->op());
 }
 template <class Op>
-auto communicator::allreduce(const std::string &_value, const op_proxy<std::string, Op> *_operation) -> std::string
-{
-    return allreduce(_value, _operation->op());
-}
-template <class T, class Op>
-auto communicator::allreduce(const T _value, const op_proxy<T, Op> *_operation) -> T
+auto communicator::allreduce(const char _value, const op_proxy<std::string, Op> *_operation) -> std::string
 {
     return allreduce(_value, _operation->op());
 }
@@ -504,33 +526,58 @@ auto communicator::allreduce(const char *_value, const op_proxy<std::string, Op>
 {
     return allreduce(_value, _operation->op());
 }
+template <class Op>
+auto communicator::allreduce(const std::string &_value, const op_proxy<std::string, Op> *_operation) -> std::string
+{
+    return allreduce(_value, _operation->op());
+}
 #pragma endregion
 #pragma region MPI sender
 template <class T>
-auto sender::send(const T _value) -> void
+auto sender::send(const T &_value) -> void
 {
-    send_impl(_dest, _tag, _comm, _value);
+    return send_impl(_dest, _tag, _comm, _value);
 }
 template <class T>
-auto sender::ssend(const T _value) -> void
+auto sender::send(const std::vector<T> &_value) -> void
 {
-    ssend_impl(_dest, _tag, _comm, _value);
+    return send_impl(_dest, _tag, _comm, _value);
 }
 template <class T>
-auto sender::rsend(const T _value) -> void
+auto sender::ssend(const T &_value) -> void
 {
-    rsend_impl(_dest, _tag, _comm, _value);
+    return ssend_impl(_dest, _tag, _comm, _value);
+}
+template <class T>
+auto sender::ssend(const std::vector<T> &_value) -> void
+{
+    return ssend_impl(_dest, _tag, _comm, _value);
+}
+template <class T>
+auto sender::rsend(const T &_value) -> void
+{
+    return rsend_impl(_dest, _tag, _comm, _value);
+}
+template <class T>
+auto sender::rsend(const std::vector<T> &_value) -> void
+{
+    return rsend_impl(_dest, _tag, _comm, _value);
 }
 
 template <class T>
-auto sender::gather(const T &_value, T &_bucket) -> void
+auto sender::gather(const T &_value, std::vector<T> &_bucket) -> void
 {
-    gather_impl(_dest, _comm, _value, _bucket);
+    return gather(std::vector<T>{_value}, _bucket);
 }
 template <class T>
-auto sender::gather(const T _value, std::vector<T> &_bucket) -> void
+auto sender::gather(const std::vector<T> &_value, std::vector<T> &_bucket) -> void
 {
-    gather({_value}, _bucket);
+    return gather_impl(_dest, _comm, _value, _bucket);
+}
+template <class T>
+auto sender::gather(const T &_value) -> std::vector<T>
+{
+    return gather(std::vector<T>{_value});
 }
 template <class T>
 auto sender::gather(const std::vector<T> &_value) -> std::vector<T>
@@ -539,28 +586,28 @@ auto sender::gather(const std::vector<T> &_value) -> std::vector<T>
     gather(_value, _bucket);
     return _bucket;
 }
-template <class T>
-auto sender::gather(const T _value) -> std::vector<T>
-{
-    return gather(std::vector<T>{_value});
-}
 
 template <class T>
 auto sender::reduce(const T &_value, T &_bucket, MPI_Op _operation) -> void
 {
-    reduce_impl(_dest, _comm, _value, _bucket, _operation);
+    return reduce_impl(_dest, _comm, _value, _bucket, _operation);
+}
+template <class T>
+auto sender::reduce(const std::vector<T> &_value, std::vector<T> &_bucket, MPI_Op _operation) -> void
+{
+    return reduce_impl(_dest, _comm, _value, _bucket, _operation);
+}
+template <class T>
+auto sender::reduce(const T &_value, MPI_Op _operation) -> T
+{
+    auto _bucket = T{};
+    reduce(_value, _bucket, _operation);
+    return _bucket;
 }
 template <class T>
 auto sender::reduce(const std::vector<T> &_value, MPI_Op _operation) -> std::vector<T>
 {
     auto _bucket = std::vector<T>{};
-    reduce(_value, _bucket, _operation);
-    return _bucket;
-}
-template <class T>
-auto sender::reduce(const T _value, MPI_Op _operation) -> T
-{
-    auto _bucket = T{};
     reduce(_value, _bucket, _operation);
     return _bucket;
 }
@@ -571,22 +618,47 @@ auto sender::reduce(const T &_value, T &_bucket, const op_proxy<T, Op> *_operati
     return reduce(_value, _bucket, _operation->op());
 }
 template <class T, class Op>
+auto sender::reduce(const std::vector<T> &_value, std::vector<T> &_bucket, const op_proxy<T, Op> *_operation) -> void
+{
+    return reduce(_value, _bucket, _operation->op());
+}
+template <class Op>
+auto sender::reduce(const char _value, std::string &_bucket, const op_proxy<std::string, Op> *_operation) -> void
+{
+    return reduce(_value, _bucket, _operation->op());
+}
+template <class Op>
+auto sender::reduce(const char *_value, std::string &_bucket, const op_proxy<std::string, Op> *_operation) -> void
+{
+    return reduce(_value, _bucket, _operation->op());
+}
+template <class Op>
+auto sender::reduce(const std::string &_value, std::string &_bucket, const op_proxy<std::string, Op> *_operation) -> void
+{
+    return reduce(_value, _bucket, _operation->op());
+}
+template <class T, class Op>
+auto sender::reduce(const T &_value, const op_proxy<T, Op> *_operation) -> T
+{
+    return reduce(_value, _operation->op());
+}
+template <class T, class Op>
 auto sender::reduce(const std::vector<T> &_value, const op_proxy<T, Op> *_operation) -> std::vector<T>
 {
     return reduce(_value, _operation->op());
 }
 template <class Op>
-auto sender::reduce(const std::string &_value, const op_proxy<std::string, Op> *_operation) -> std::string
-{
-    return reduce(_value, _operation->op());
-}
-template <class T, class Op>
-auto sender::reduce(const T _value, const op_proxy<T, Op> *_operation) -> T
+auto sender::reduce(const char _value, const op_proxy<std::string, Op> *_operation) -> std::string
 {
     return reduce(_value, _operation->op());
 }
 template <class Op>
 auto sender::reduce(const char *_value, const op_proxy<std::string, Op> *_operation) -> std::string
+{
+    return reduce(_value, _operation->op());
+}
+template <class Op>
+auto sender::reduce(const std::string &_value, const op_proxy<std::string, Op> *_operation) -> std::string
 {
     return reduce(_value, _operation->op());
 }
@@ -610,11 +682,49 @@ auto receiver::bcast(T &_value) -> void
 {
     bcast_impl(_source, _comm, _value);
 }
+template <class R, class T>
+auto receiver::bcast(const T &_value) -> std::enable_if_t<std::is_same<R, T>::value, T>
+{
+    auto _bucket = _value;
+    bcast(_bucket);
+    return _bucket;
+}
+template <class R, class T>
+auto receiver::bcast(const std::vector<T> &_value) -> std::enable_if_t<std::is_same<R, std::vector<T>>::value, std::vector<T>>
+{
+    auto _bucket = _value;
+    bcast(_bucket);
+    return _bucket;
+}
+template <class R>
+auto receiver::bcast(const char _value) -> std::enable_if_t<std::is_same<R, std::string>::value, std::string>
+{
+    return bcast<R>(std::string{_value});
+}
+template <class R>
+auto receiver::bcast(const char *_value) -> std::enable_if_t<std::is_same<R, std::string>::value, std::string>
+{
+    return bcast<R>(std::string{_value});
+}
+template <class R>
+auto receiver::bcast(const std::string &_value) -> std::enable_if_t<std::is_same<R, std::string>::value, std::string>
+{
+    auto _bucket = _value;
+    bcast(_bucket);
+    return _bucket;
+}
 
 template <class T>
-auto receiver::scatter(T &_value, const size_t _chunk_size) -> T
+auto receiver::scatter(const std::vector<T> &_value, std::vector<T> &_bucket, const size_t _chunk_size) -> void
 {
-    return scatter_impl(_source, _comm, _value, _chunk_size);
+    return scatter_impl(_source, _comm, _value, _bucket, _chunk_size);
+}
+template <class T>
+auto receiver::scatter(const std::vector<T> &_value, const size_t _chunk_size) -> std::vector<T>
+{
+    auto _bucket = std::vector<T>{};
+    scatter(_value, _bucket, _chunk_size);
+    return _bucket;
 }
 #pragma endregion
 } // namespace mpi
