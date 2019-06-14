@@ -2,7 +2,7 @@
 
 namespace mpi
 {
-#pragma region free MPI functions
+#pragma region free functions
 auto initialized() -> bool
 {
     auto flag = int{};
@@ -26,7 +26,7 @@ auto processor_name() -> std::string
     return std::string{name.data()};
 }
 #pragma endregion
-#pragma region MPI init
+#pragma region init
 mpi::mpi(int argc, char **argv)
 {
     paranoidly_assert((!initialized()));
@@ -42,7 +42,7 @@ mpi::~mpi()
     MPI_Finalize();
 }
 #pragma endregion
-#pragma region MPI Version information
+#pragma region version information
 version_info::version_info()
 {
     paranoidly_assert((initialized()));
@@ -63,7 +63,58 @@ auto version() -> version_info
     return version_info{};
 }
 #pragma endregion
-#pragma region MPI all to all
+
+#pragma region allgather
+auto allgather_impl(MPI_Comm _comm, const std::string &_value, std::string &_bucket) -> void
+{
+    paranoidly_assert((initialized()));
+    paranoidly_assert((!finalized()));
+    //get current rank
+    auto _rank = comm(_comm)->rank();
+    //get world size
+    auto _size = comm(_comm)->size();
+    //broadcast the chunk_size before the data is gathered
+    auto _chunk_size = (_rank == 0) ? static_cast<int>(_value.size()) : int{};
+    comm(_comm)->source(0)->bcast(_chunk_size);
+    //check size
+    assert((_value.size() == _chunk_size));
+    //we need to allocate some memory for the result
+    auto _c_str = std::make_unique<char[]>(_size * _chunk_size + 1);
+    //gather the data
+    MPI_Allgather(_value.c_str(), _chunk_size, MPI_CHAR, _c_str.get(), _chunk_size, MPI_CHAR, _comm);
+    //we need to write the value back
+    _bucket = std::string{_c_str.get()};
+}
+auto allgather_impl(MPI_Comm _comm, const char *_value, std::string &_bucket) -> void
+{
+    allgather_impl(_comm, std::string{_value}, _bucket);
+}
+#pragma endregion
+#pragma region allreduce
+auto allreduce_impl(MPI_Comm _comm, const std::string &_value, std::string &_bucket, MPI_Op _operation) -> void
+{
+    paranoidly_assert((initialized()));
+    paranoidly_assert((!finalized()));
+    //get current rank
+    auto _rank = comm(_comm)->rank();
+    //broadcast the chunk_size before the string is reduced
+    auto _size = (_rank == 0) ? static_cast<int>(_value.size()) : int{};
+    comm(_comm)->source(0)->bcast(_size);
+    //check size
+    assert((_value.size() == _size));
+    //we need to allocate some memory for the result
+    auto _c_str = std::make_unique<char[]>((_rank == 0) ? _size + 1 : 0);
+    //reduce the data
+    MPI_Allreduce(_value.c_str(), _c_str.get(), _size, MPI_CHAR, _operation, _comm);
+    //we need to write the value back
+    _bucket = std::string{_c_str.get()};
+}
+auto allreduce_impl(MPI_Comm _comm, const char *_value, std::string &_bucket, MPI_Op _operation) -> void
+{
+    allreduce_impl(_comm, std::string{_value}, _bucket, _operation);
+}
+#pragma endregion
+#pragma region alltoall
 auto alltoall_impl(MPI_Comm _comm, const std::string &_value, std::string &_bucket, const size_t _chunk_size) -> void
 {
     paranoidly_assert((initialized()));
@@ -89,7 +140,72 @@ auto alltoall_impl(MPI_Comm _comm, const char *_value, std::string &_bucket, con
     alltoall_impl(_comm, std::string{_value}, _bucket, _chunk_size);
 }
 #pragma endregion
-#pragma region MPI reduce
+#pragma region broadcast
+auto bcast_impl(int _source, MPI_Comm _comm, std::string &_value) -> void
+{
+    paranoidly_assert((initialized()));
+    paranoidly_assert((!finalized()));
+    //get current rank
+    auto _rank = comm(_comm)->rank();
+    //broadcast the size before the string
+    auto _size = (_rank == _source) ? static_cast<int>(_value.size()) : int{};
+    comm(_comm)->source(_source)->bcast(_size);
+    //we need to allocate some memory for it
+    auto _c_str = std::make_unique<char[]>(_size + 1);
+    //we need to copy the data into the right place
+    if (_rank == _source)
+        std::strcpy(_c_str.get(), _value.c_str());
+    //broadcast the data
+    MPI_Bcast(_c_str.get(), _size, MPI_CHAR, _source, _comm);
+    //at we need to write the value back
+    _value = std::string{_c_str.get()};
+}
+#pragma endregion
+#pragma region gather
+auto gather_impl(int _dest, MPI_Comm _comm, const std::string &_value, std::string &_bucket) -> void
+{
+    paranoidly_assert((initialized()));
+    paranoidly_assert((!finalized()));
+    //get current rank
+    auto _rank = comm(_comm)->rank();
+    //get world size
+    auto _size = comm(_comm)->size();
+    //broadcast the chunk_size before the string is gathered
+    auto _chunk_size = (_rank == _dest) ? static_cast<int>(_value.size()) : int{};
+    comm(_comm)->source(_dest)->bcast(_chunk_size);
+    //check size
+    assert((_value.size() == _chunk_size));
+    //we need to allocate some memory for the result
+    auto _c_str = std::make_unique<char[]>((_rank == _dest) ? _size * _chunk_size + 1 : 0);
+    //gather the data
+    MPI_Gather(_value.c_str(), _chunk_size, MPI_CHAR, _c_str.get(), _chunk_size, MPI_CHAR, _dest, _comm);
+    //we need to write the value back
+    if (_rank == _dest)
+        _bucket = std::string{_c_str.get()};
+}
+auto gather_impl(int _dest, MPI_Comm _comm, const char *_value, std::string &_bucket) -> void
+{
+    gather_impl(_dest, _comm, std::string{_value}, _bucket);
+}
+#pragma endregion
+#pragma region receive
+auto recv_impl(int _source, int _tag, MPI_Comm _comm, MPI_Status *_status, std::string &_value) -> void
+{
+    paranoidly_assert((initialized()));
+    paranoidly_assert((!finalized()));
+    //we need to finde the proper size of the incoming string
+    MPI_Probe(_source, _tag, _comm, _status);
+    auto _size = int{};
+    MPI_Get_count(_status, MPI_CHAR, &_size);
+    //we need to allocate some memory for it
+    auto _c_str = std::make_unique<char[]>(_size + 1);
+    //we need to receive it
+    MPI_Recv(_c_str.get(), _size, MPI_CHAR, _source, _tag, _comm, _status);
+    //we need to write the value back
+    _value = std::string{_c_str.get()};
+}
+#pragma endregion
+#pragma region reduce
 auto reduce_impl(int _dest, MPI_Comm _comm, const std::string &_value, std::string &_bucket, MPI_Op _operation) -> void
 {
     paranoidly_assert((initialized()));
@@ -114,7 +230,7 @@ auto reduce_impl(int _dest, MPI_Comm _comm, const char *_value, std::string &_bu
     reduce_impl(_dest, _comm, std::string{_value}, _bucket, _operation);
 }
 #pragma endregion
-#pragma region MPI local reduce
+#pragma region local reduce
 auto reduce(const std::string &_value, std::string &_bucket, MPI_Op _operation) -> void
 {
     paranoidly_assert((initialized()));
@@ -142,84 +258,7 @@ auto reduce(const char *_value, MPI_Op _operation) -> std::string
     return reduce(std::string{_value}, _operation);
 }
 #pragma endregion
-#pragma region MPI allreduce
-auto allreduce_impl(MPI_Comm _comm, const std::string &_value, std::string &_bucket, MPI_Op _operation) -> void
-{
-    paranoidly_assert((initialized()));
-    paranoidly_assert((!finalized()));
-    //get current rank
-    auto _rank = comm(_comm)->rank();
-    //broadcast the chunk_size before the string is reduced
-    auto _size = (_rank == 0) ? static_cast<int>(_value.size()) : int{};
-    comm(_comm)->source(0)->bcast(_size);
-    //check size
-    assert((_value.size() == _size));
-    //we need to allocate some memory for the result
-    auto _c_str = std::make_unique<char[]>((_rank == 0) ? _size + 1 : 0);
-    //reduce the data
-    MPI_Allreduce(_value.c_str(), _c_str.get(), _size, MPI_CHAR, _operation, _comm);
-    //we need to write the value back
-    _bucket = std::string{_c_str.get()};
-}
-auto allreduce_impl(MPI_Comm _comm, const char *_value, std::string &_bucket, MPI_Op _operation) -> void
-{
-    allreduce_impl(_comm, std::string{_value}, _bucket, _operation);
-}
-#pragma endregion
-#pragma region MPI gather
-auto gather_impl(int _dest, MPI_Comm _comm, const std::string &_value, std::string &_bucket) -> void
-{
-    paranoidly_assert((initialized()));
-    paranoidly_assert((!finalized()));
-    //get current rank
-    auto _rank = comm(_comm)->rank();
-    //get world size
-    auto _size = comm(_comm)->size();
-    //broadcast the chunk_size before the string is gathered
-    auto _chunk_size = (_rank == _dest) ? static_cast<int>(_value.size()) : int{};
-    comm(_comm)->source(_dest)->bcast(_chunk_size);
-    //check size
-    assert((_value.size() == _chunk_size));
-    //we need to allocate some memory for the result
-    auto _c_str = std::make_unique<char[]>((_rank == _dest) ? _size * _chunk_size + 1 : 0);
-    //gather the data
-    MPI_Gather(_value.c_str(), _chunk_size, MPI_CHAR, _c_str.get(), _chunk_size, MPI_CHAR, _dest, _comm);
-    //we need to write the value back
-    if (_rank == _dest)
-        _bucket = std::string{_c_str.get()};
-}
-auto gather_impl(int _dest, MPI_Comm _comm, const char *_value, std::string &_bucket) -> void
-{
-    gather_impl(_dest, _comm, std::string{_value}, _bucket);
-}
-#pragma endregion
-#pragma region MPI allgather
-auto allgather_impl(MPI_Comm _comm, const std::string &_value, std::string &_bucket) -> void
-{
-    paranoidly_assert((initialized()));
-    paranoidly_assert((!finalized()));
-    //get current rank
-    auto _rank = comm(_comm)->rank();
-    //get world size
-    auto _size = comm(_comm)->size();
-    //broadcast the chunk_size before the data is gathered
-    auto _chunk_size = (_rank == 0) ? static_cast<int>(_value.size()) : int{};
-    comm(_comm)->source(0)->bcast(_chunk_size);
-    //check size
-    assert((_value.size() == _chunk_size));
-    //we need to allocate some memory for the result
-    auto _c_str = std::make_unique<char[]>(_size * _chunk_size + 1);
-    //gather the data
-    MPI_Allgather(_value.c_str(), _chunk_size, MPI_CHAR, _c_str.get(), _chunk_size, MPI_CHAR, _comm);
-    //we need to write the value back
-    _bucket = std::string{_c_str.get()};
-}
-auto allgather_impl(MPI_Comm _comm, const char *_value, std::string &_bucket) -> void
-{
-    allgather_impl(_comm, std::string{_value}, _bucket);
-}
-#pragma endregion
-#pragma region MPI scatter
+#pragma region scatter
 auto scatter_impl(int _source, MPI_Comm _comm, const std::string &_value, std::string &_bucket, const size_t _chunk_size) -> void
 {
     paranoidly_assert((initialized()));
@@ -238,7 +277,7 @@ auto scatter_impl(int _source, MPI_Comm _comm, const std::string &_value, std::s
     _bucket = std::string{_chunk.get()};
 }
 #pragma endregion
-#pragma region MPI send
+#pragma region send
 auto send_impl(int _dest, int _tag, MPI_Comm _comm, const std::string &_value) -> void
 {
     paranoidly_assert((initialized()));
@@ -252,7 +291,7 @@ auto send_impl(int _dest, int _tag, MPI_Comm _comm, const char *_value) -> void
     send_impl(_dest, _tag, _comm, std::string{_value});
 }
 #pragma endregion
-#pragma region MPI synchronized send
+#pragma region synchronized send
 auto ssend_impl(int _dest, int _tag, MPI_Comm _comm, const std::string &_value) -> void
 {
     paranoidly_assert((initialized()));
@@ -264,7 +303,7 @@ auto ssend_impl(int _dest, int _tag, MPI_Comm _comm, const char *_value) -> void
     ssend_impl(_dest, _tag, _comm, std::string{_value});
 }
 #pragma endregion
-#pragma region MPI ready mode send
+#pragma region ready mode send
 auto rsend_impl(int _dest, int _tag, MPI_Comm _comm, const std::string &_value) -> void
 {
     paranoidly_assert((initialized()));
@@ -276,45 +315,8 @@ auto rsend_impl(int _dest, int _tag, MPI_Comm _comm, const char *_value) -> void
     rsend_impl(_dest, _tag, _comm, std::string{_value});
 }
 #pragma endregion
-#pragma region MPI receive
-auto recv_impl(int _source, int _tag, MPI_Comm _comm, MPI_Status *_status, std::string &_value) -> void
-{
-    paranoidly_assert((initialized()));
-    paranoidly_assert((!finalized()));
-    //we need to finde the proper size of the incoming string
-    MPI_Probe(_source, _tag, _comm, _status);
-    auto _size = int{};
-    MPI_Get_count(_status, MPI_CHAR, &_size);
-    //we need to allocate some memory for it
-    auto _c_str = std::make_unique<char[]>(_size + 1);
-    //we need to receive it
-    MPI_Recv(_c_str.get(), _size, MPI_CHAR, _source, _tag, _comm, _status);
-    //we need to write the value back
-    _value = std::string{_c_str.get()};
-}
-#pragma endregion
-#pragma region MPI broadcast
-auto bcast_impl(int _source, MPI_Comm _comm, std::string &_value) -> void
-{
-    paranoidly_assert((initialized()));
-    paranoidly_assert((!finalized()));
-    //get current rank
-    auto _rank = comm(_comm)->rank();
-    //broadcast the size before the string
-    auto _size = (_rank == _source) ? static_cast<int>(_value.size()) : int{};
-    comm(_comm)->source(_source)->bcast(_size);
-    //we need to allocate some memory for it
-    auto _c_str = std::make_unique<char[]>(_size + 1);
-    //we need to copy the data into the right place
-    if (_rank == _source)
-        std::strcpy(_c_str.get(), _value.c_str());
-    //broadcast the data
-    MPI_Bcast(_c_str.get(), _size, MPI_CHAR, _source, _comm);
-    //at we need to write the value back
-    _value = std::string{_c_str.get()};
-}
-#pragma endregion
-#pragma region MPI communicator
+
+#pragma region communicator
 communicator::communicator(MPI_Comm _comm) : _comm(_comm)
 {
 }
@@ -446,7 +448,20 @@ auto communicator::allreduce(const std::string &_value, MPI_Op _operation) -> st
     return _bucket;
 }
 #pragma endregion
-#pragma region MPI compare
+#pragma region comm
+auto comm(MPI_Comm _comm) -> std::unique_ptr<communicator>
+{
+    return std::make_unique<communicator>(_comm);
+}
+auto comm(const std::string &_name) -> std::unique_ptr<communicator>
+{
+    if (_name == std::string{"world"})
+        return comm(MPI_COMM_WORLD);
+    else
+        throw;
+}
+#pragma endregion
+#pragma region compare
 auto compare(const MPI_Comm &lhs, const MPI_Comm &rhs) -> communicator::comp
 {
     auto _result = int{};
@@ -492,20 +507,40 @@ auto communicator::operator!=(const MPI_Comm &rhs) -> bool
     return !(*this == rhs);
 }
 #pragma endregion
-#pragma region MPI comm
-auto comm(MPI_Comm _comm) -> std::unique_ptr<communicator>
+#pragma region receiver
+receiver::receiver(int _source, int _tag, MPI_Comm _comm) : _source(_source), _tag(_tag), _comm(_comm)
 {
-    return std::make_unique<communicator>(_comm);
 }
-auto comm(const std::string &_name) -> std::unique_ptr<communicator>
+
+auto receiver::operator==(const receiver &rhs) -> bool
 {
-    if (_name == std::string{"world"})
-        return comm(MPI_COMM_WORLD);
-    else
-        throw;
+    return _source == rhs._source && _tag == rhs._tag && _comm == rhs._comm;
+}
+auto receiver::operator!=(const receiver &rhs) -> bool
+{
+    return !(*this == rhs);
+}
+
+auto receiver::scatter(const char *_value, std::string &_bucket, const size_t _chunk_size) -> void
+{
+    return scatter(std::string{_value}, _bucket, _chunk_size);
+}
+auto receiver::scatter(const std::string &_value, std::string &_bucket, const size_t _chunk_size) -> void
+{
+    return scatter_impl(_source, _comm, _value, _bucket, _chunk_size);
+}
+auto receiver::scatter(const char *_value, const size_t _chunk_size) -> std::string
+{
+    return scatter(std::string{_value}, _chunk_size);
+}
+auto receiver::scatter(const std::string &_value, const size_t _chunk_size) -> std::string
+{
+    auto _bucket = std::string{};
+    scatter(_value, _bucket, _chunk_size);
+    return _bucket;
 }
 #pragma endregion
-#pragma region MPI sender
+#pragma region sender
 sender::sender(int _dest, int _tag, MPI_Comm _comm) : _dest(_dest), _tag(_tag), _comm(_comm)
 {
 }
@@ -607,39 +642,6 @@ auto sender::reduce(const std::string &_value, MPI_Op _operation) -> std::string
 {
     auto _bucket = std::string{};
     reduce(_value, _bucket, _operation);
-    return _bucket;
-}
-#pragma endregion
-#pragma region MPI receiver
-receiver::receiver(int _source, int _tag, MPI_Comm _comm) : _source(_source), _tag(_tag), _comm(_comm)
-{
-}
-
-auto receiver::operator==(const receiver &rhs) -> bool
-{
-    return _source == rhs._source && _tag == rhs._tag && _comm == rhs._comm;
-}
-auto receiver::operator!=(const receiver &rhs) -> bool
-{
-    return !(*this == rhs);
-}
-
-auto receiver::scatter(const char *_value, std::string &_bucket, const size_t _chunk_size) -> void
-{
-    return scatter(std::string{_value}, _bucket, _chunk_size);
-}
-auto receiver::scatter(const std::string &_value, std::string &_bucket, const size_t _chunk_size) -> void
-{
-    return scatter_impl(_source, _comm, _value, _bucket, _chunk_size);
-}
-auto receiver::scatter(const char *_value, const size_t _chunk_size) -> std::string
-{
-    return scatter(std::string{_value}, _chunk_size);
-}
-auto receiver::scatter(const std::string &_value, const size_t _chunk_size) -> std::string
-{
-    auto _bucket = std::string{};
-    scatter(_value, _bucket, _chunk_size);
     return _bucket;
 }
 #pragma endregion

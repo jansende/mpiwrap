@@ -13,7 +13,7 @@
 
 namespace mpi
 {
-#pragma region MPI type wrapper
+#pragma region type wrapper
 template <class>
 struct type_wrapper
 {
@@ -95,12 +95,13 @@ struct type_wrapper<long double>
     operator MPI_Datatype() const { return MPI_LONG_DOUBLE; }
 };
 #pragma endregion
-#pragma region free MPI functions
+
+#pragma region free functions
 auto initialized() -> bool;
 auto finalized() -> bool;
 auto processor_name() -> std::string;
 #pragma endregion
-#pragma region MPI init
+#pragma region init
 class mpi
 {
 public:
@@ -111,7 +112,7 @@ public:
     ~mpi();
 };
 #pragma endregion
-#pragma region MPI Version information
+#pragma region version information
 class version_info
 {
 private:
@@ -125,35 +126,13 @@ public:
 };
 auto version() -> version_info;
 #pragma endregion
-#pragma region MPI Operation wrapper
-template <class T, class Op>
-class op_proxy
-{
-private:
-    MPI_Op _operation;
-    const bool _commute;
 
-    static auto wrapper(void *void_a, void *void_b, int *len, MPI_Datatype *) -> void;
-
-public:
-    op_proxy(const op_proxy &) = delete;
-    op_proxy(op_proxy &&) = delete;
-    op_proxy &operator=(const op_proxy &) = delete;
-
-    op_proxy(Op, const bool _commute);
-    ~op_proxy();
-
-    auto op() const -> const MPI_Op &;
-    auto commutes() const -> bool;
-};
-
-template <class T, class Op>
-auto make_op(Op _func, const bool _commute = false) -> std::unique_ptr<op_proxy<T, Op>>;
-#pragma endregion
-#pragma region MPI communicator
+#pragma region communicator
 //declarations
 class sender;
 class receiver;
+template <class T, class Op>
+class op_proxy;
 
 class communicator
 {
@@ -260,17 +239,85 @@ public:
     auto allreduce(const std::string &_value, const op_proxy<std::string, Op> *_operation) -> std::string;
 };
 #pragma endregion
-#pragma region MPI compare
+#pragma region comm
+auto comm(MPI_Comm _comm) -> std::unique_ptr<communicator>;
+auto comm(const std::string &_name) -> std::unique_ptr<communicator>;
+#pragma endregion
+#pragma region compare
 auto compare(const MPI_Comm &lhs, const MPI_Comm &rhs) -> communicator::comp;
 auto compare(const communicator &lhs, const MPI_Comm &rhs) -> communicator::comp;
 auto compare(const MPI_Comm &lhs, const communicator &rhs) -> communicator::comp;
 auto compare(const communicator &lhs, const communicator &rhs) -> communicator::comp;
 #pragma endregion
-#pragma region MPI comm
-auto comm(MPI_Comm _comm) -> std::unique_ptr<communicator>;
-auto comm(const std::string &_name) -> std::unique_ptr<communicator>;
+#pragma region operation wrapper
+template <class T, class Op>
+class op_proxy
+{
+private:
+    MPI_Op _operation;
+    const bool _commute;
+
+    static auto wrapper(void *void_a, void *void_b, int *len, MPI_Datatype *) -> void;
+
+public:
+    op_proxy(const op_proxy &) = delete;
+    op_proxy(op_proxy &&) = delete;
+    op_proxy &operator=(const op_proxy &) = delete;
+
+    op_proxy(Op, const bool _commute);
+    ~op_proxy();
+
+    auto op() const -> const MPI_Op &;
+    auto commutes() const -> bool;
+};
+
+template <class T, class Op>
+auto make_op(Op _func, const bool _commute = false) -> std::unique_ptr<op_proxy<T, Op>>;
 #pragma endregion
-#pragma region MPI sender
+#pragma region receiver
+class receiver
+{
+private:
+    int _source;
+    int _tag;
+    MPI_Comm _comm;
+    MPI_Status _status;
+
+public:
+    receiver(int _source, int _tag, MPI_Comm _comm);
+
+    auto operator==(const receiver &rhs) -> bool;
+    auto operator!=(const receiver &rhs) -> bool;
+
+    template <class T>
+    auto recv(T &_value) -> void;
+    template <class T>
+    auto recv() -> T;
+
+    template <class T>
+    auto bcast(T &_value) -> void;
+    template <class R, class T>
+    auto bcast(const T &_value) -> std::enable_if_t<std::is_same<R, T>::value, T>;
+    template <class R, class T>
+    auto bcast(const std::vector<T> &_value) -> std::enable_if_t<std::is_same<R, std::vector<T>>::value, std::vector<T>>;
+    template <class R>
+    auto bcast(const char _value) -> std::enable_if_t<std::is_same<R, std::string>::value, std::string>;
+    template <class R>
+    auto bcast(const char *_value) -> std::enable_if_t<std::is_same<R, std::string>::value, std::string>;
+    template <class R>
+    auto bcast(const std::string &_value) -> std::enable_if_t<std::is_same<R, std::string>::value, std::string>;
+
+    template <class T>
+    auto scatter(const std::vector<T> &_value, std::vector<T> &_bucket, const size_t _chunk_size) -> void;
+    auto scatter(const char *_value, std::string &_bucket, const size_t _chunk_size) -> void;
+    auto scatter(const std::string &_value, std::string &_bucket, const size_t _chunk_size) -> void;
+    template <class T>
+    auto scatter(const std::vector<T> &_value, const size_t _chunk_size) -> std::vector<T>;
+    auto scatter(const char *_value, const size_t _chunk_size) -> std::string;
+    auto scatter(const std::string &_value, const size_t _chunk_size) -> std::string;
+};
+#pragma endregion
+#pragma region sender
 class sender
 {
 private:
@@ -356,49 +403,6 @@ public:
     auto reduce(const char *_value, const op_proxy<std::string, Op> *_operation) -> std::string;
     template <class Op>
     auto reduce(const std::string &_value, const op_proxy<std::string, Op> *_operation) -> std::string;
-};
-#pragma endregion
-#pragma region MPI receiver
-class receiver
-{
-private:
-    int _source;
-    int _tag;
-    MPI_Comm _comm;
-    MPI_Status _status;
-
-public:
-    receiver(int _source, int _tag, MPI_Comm _comm);
-
-    auto operator==(const receiver &rhs) -> bool;
-    auto operator!=(const receiver &rhs) -> bool;
-
-    template <class T>
-    auto recv(T &_value) -> void;
-    template <class T>
-    auto recv() -> T;
-
-    template <class T>
-    auto bcast(T &_value) -> void;
-    template <class R, class T>
-    auto bcast(const T &_value) -> std::enable_if_t<std::is_same<R, T>::value, T>;
-    template <class R, class T>
-    auto bcast(const std::vector<T> &_value) -> std::enable_if_t<std::is_same<R, std::vector<T>>::value, std::vector<T>>;
-    template <class R>
-    auto bcast(const char _value) -> std::enable_if_t<std::is_same<R, std::string>::value, std::string>;
-    template <class R>
-    auto bcast(const char *_value) -> std::enable_if_t<std::is_same<R, std::string>::value, std::string>;
-    template <class R>
-    auto bcast(const std::string &_value) -> std::enable_if_t<std::is_same<R, std::string>::value, std::string>;
-
-    template <class T>
-    auto scatter(const std::vector<T> &_value, std::vector<T> &_bucket, const size_t _chunk_size) -> void;
-    auto scatter(const char *_value, std::string &_bucket, const size_t _chunk_size) -> void;
-    auto scatter(const std::string &_value, std::string &_bucket, const size_t _chunk_size) -> void;
-    template <class T>
-    auto scatter(const std::vector<T> &_value, const size_t _chunk_size) -> std::vector<T>;
-    auto scatter(const char *_value, const size_t _chunk_size) -> std::string;
-    auto scatter(const std::string &_value, const size_t _chunk_size) -> std::string;
 };
 #pragma endregion
 } // namespace mpi

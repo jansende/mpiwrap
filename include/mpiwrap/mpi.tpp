@@ -6,7 +6,65 @@
 
 namespace mpi
 {
-#pragma region MPI all to all
+#pragma region allgather
+//declarations
+auto allgather_impl(MPI_Comm _comm, const std::string &_value, std::string &_bucket) -> void;
+auto allgather_impl(MPI_Comm _comm, const char *_value, std::string &_bucket) -> void;
+//templates
+template <class T>
+auto allgather_impl(MPI_Comm _comm, const std::vector<T> &_value, std::vector<T> &_bucket) -> void
+{
+    paranoidly_assert((initialized()));
+    paranoidly_assert((!finalized()));
+    //get current rank
+    auto _rank = comm(_comm)->rank();
+    //get world size
+    auto _size = comm(_comm)->size();
+    //broadcast the chunk_size before the data is gathered
+    auto _chunk_size = (_rank == 0) ? static_cast<int>(_value.size()) : int{};
+    comm(_comm)->source(0)->bcast(_chunk_size);
+    //check size
+    assert((_value.size() == _chunk_size));
+    //resize bucket to take all elements
+    if (_size * _chunk_size != _bucket.size())
+        _bucket.resize(_size * _chunk_size);
+    //gather the data
+    MPI_Allgather(_value.data(), _chunk_size, type_wrapper<T>{}, _bucket.data(), _chunk_size, type_wrapper<T>{}, _comm);
+}
+#pragma endregion
+#pragma region allreduce
+//declarations
+auto allreduce_impl(MPI_Comm _comm, const std::string &_value, std::string &_bucket, MPI_Op _operation) -> void;
+auto allreduce_impl(MPI_Comm _comm, const char *_value, std::string &_bucket, MPI_Op _operation) -> void;
+//templates
+template <class T>
+auto allreduce_impl(MPI_Comm _comm, const T &_value, T &_bucket, MPI_Op _operation) -> void
+{
+    paranoidly_assert((initialized()));
+    paranoidly_assert((!finalized()));
+    //reduce the data
+    MPI_Reduce(&_value, &_bucket, 1, type_wrapper<T>{}, _operation, _comm);
+}
+template <class T>
+auto allreduce_impl(MPI_Comm _comm, const std::vector<T> &_value, std::vector<T> &_bucket, MPI_Op _operation) -> void
+{
+    paranoidly_assert((initialized()));
+    paranoidly_assert((!finalized()));
+    //get current rank
+    auto _rank = comm(_comm)->rank();
+    //broadcast the chunk_size before the data is reduced
+    auto _size = (_rank == 0) ? static_cast<int>(_value.size()) : int{};
+    comm(_comm)->source(0)->bcast(_size);
+    //check size
+    assert((_value.size() == _size));
+    //resize bucket to take all elements
+    if (_size != _bucket.size())
+        _bucket.resize(_size);
+    //reduce the data
+    MPI_Allreduce(_value.data(), _bucket.data(), _size, type_wrapper<T>{}, _operation, _comm);
+}
+#pragma endregion
+#pragma region alltoall
 //declarations
 auto alltoall_impl(MPI_Comm _comm, const std::string &_value, std::string &_bucket, const size_t _chunk_size) -> void;
 auto alltoall_impl(MPI_Comm _comm, const char *_value, std::string &_bucket, const size_t _chunk_size) -> void;
@@ -32,7 +90,90 @@ auto alltoall_impl(MPI_Comm _comm, const std::vector<T> &_value, std::vector<T> 
     MPI_Alltoall(_value.data(), _chunk_size, type_wrapper<T>{}, _bucket.data(), _chunk_size, type_wrapper<T>{}, _comm);
 }
 #pragma endregion
-#pragma region MPI reduce
+#pragma region broadcast
+//declarations
+auto bcast_impl(int _source, MPI_Comm _comm, std::string &_value) -> void;
+//templates
+template <class T>
+auto bcast_impl(int _source, MPI_Comm _comm, T &_value) -> void
+{
+    paranoidly_assert((initialized()));
+    paranoidly_assert((!finalized()));
+    MPI_Bcast(&_value, 1, type_wrapper<T>{}, _source, _comm);
+}
+template <class T>
+auto bcast_impl(int _source, MPI_Comm _comm, std::vector<T> &_value) -> void
+{
+    paranoidly_assert((initialized()));
+    paranoidly_assert((!finalized()));
+    //get current rank
+    auto _rank = comm(_comm)->rank();
+    //broadcast the size before the data
+    auto _size = (_rank == _source) ? static_cast<int>(_value.size()) : int{};
+    comm(_comm)->source(_source)->bcast(_size);
+    //resize the vector if not the sender
+    if (_rank != _source)
+        _value.resize(_size);
+    //broadcast the data
+    MPI_Bcast(_value.data(), _size, type_wrapper<T>{}, _source, _comm);
+}
+#pragma endregion
+#pragma region gather
+//declarations
+auto gather_impl(int _dest, MPI_Comm _comm, const std::string &_value, std::string &_bucket) -> void;
+auto gather_impl(int _dest, MPI_Comm _comm, const char *_value, std::string &_bucket) -> void;
+//templates
+template <class T>
+auto gather_impl(int _dest, MPI_Comm _comm, const std::vector<T> &_value, std::vector<T> &_bucket) -> void
+{
+    paranoidly_assert((initialized()));
+    paranoidly_assert((!finalized()));
+    //get current rank
+    auto _rank = comm(_comm)->rank();
+    //get world size
+    auto _size = comm(_comm)->size();
+    //broadcast the chunk_size before the data is gathered
+    auto _chunk_size = (_rank == _dest) ? static_cast<int>(_value.size()) : int{};
+    comm(_comm)->source(_dest)->bcast(_chunk_size);
+    //check size
+    assert((_value.size() == _chunk_size));
+    //resize bucket to take all elements
+    if (_rank == _dest)
+    {
+        if (_size * _chunk_size != _bucket.size())
+            _bucket.resize(_size * _chunk_size);
+    }
+    //gather the data
+    MPI_Gather(_value.data(), _chunk_size, type_wrapper<T>{}, _bucket.data(), _chunk_size, type_wrapper<T>{}, _dest, _comm);
+}
+#pragma endregion
+#pragma region receive
+//declarations
+auto recv_impl(int _source, int _tag, MPI_Comm _comm, MPI_Status *_status, std::string &_value) -> void;
+//templates
+template <class T>
+auto recv_impl(int _source, int _tag, MPI_Comm _comm, MPI_Status *_status, T &_value) -> void
+{
+    paranoidly_assert((initialized()));
+    paranoidly_assert((!finalized()));
+    MPI_Recv(&_value, 1, type_wrapper<T>{}, _source, _tag, _comm, _status);
+}
+template <class T>
+auto recv_impl(int _source, int _tag, MPI_Comm _comm, MPI_Status *_status, std::vector<T> &_value) -> void
+{
+    paranoidly_assert((initialized()));
+    paranoidly_assert((!finalized()));
+    //we need to finde the proper size of the incoming data
+    MPI_Probe(_source, _tag, _comm, _status);
+    auto _size = int{};
+    MPI_Get_count(_status, type_wrapper<T>{}, &_size);
+    //we need to allocate some memory for it
+    _value.resize(_size);
+    //we need to receive it
+    MPI_Recv(_value.data(), _size, type_wrapper<T>{}, _source, _tag, _comm, _status);
+}
+#pragma endregion
+#pragma region reduce
 //declarations
 auto reduce_impl(int _dest, MPI_Comm _comm, const std::string &_value, std::string &_bucket, MPI_Op _operation) -> void;
 auto reduce_impl(int _dest, MPI_Comm _comm, const char *_value, std::string &_bucket, MPI_Op _operation) -> void;
@@ -67,7 +208,7 @@ auto reduce_impl(int _dest, MPI_Comm _comm, const std::vector<T> &_value, std::v
     MPI_Reduce(_value.data(), _bucket.data(), _size, type_wrapper<T>{}, _operation, _dest, _comm);
 }
 #pragma endregion
-#pragma region MPI local reduce
+#pragma region local reduce
 //declarations
 auto reduce(const std::string &_value, std::string &_bucket, MPI_Op _operation) -> void;
 auto reduce(const char *_value, std::string &_bucket, MPI_Op _operation) -> void;
@@ -150,94 +291,7 @@ auto reduce(const char *_value, const op_proxy<std::string, Op> *_operation) -> 
     return reduce(_value, _operation->op());
 }
 #pragma endregion
-#pragma region MPI allreduce
-//declarations
-auto allreduce_impl(MPI_Comm _comm, const std::string &_value, std::string &_bucket, MPI_Op _operation) -> void;
-auto allreduce_impl(MPI_Comm _comm, const char *_value, std::string &_bucket, MPI_Op _operation) -> void;
-//templates
-template <class T>
-auto allreduce_impl(MPI_Comm _comm, const T &_value, T &_bucket, MPI_Op _operation) -> void
-{
-    paranoidly_assert((initialized()));
-    paranoidly_assert((!finalized()));
-    //reduce the data
-    MPI_Reduce(&_value, &_bucket, 1, type_wrapper<T>{}, _operation, _comm);
-}
-template <class T>
-auto allreduce_impl(MPI_Comm _comm, const std::vector<T> &_value, std::vector<T> &_bucket, MPI_Op _operation) -> void
-{
-    paranoidly_assert((initialized()));
-    paranoidly_assert((!finalized()));
-    //get current rank
-    auto _rank = comm(_comm)->rank();
-    //broadcast the chunk_size before the data is reduced
-    auto _size = (_rank == 0) ? static_cast<int>(_value.size()) : int{};
-    comm(_comm)->source(0)->bcast(_size);
-    //check size
-    assert((_value.size() == _size));
-    //resize bucket to take all elements
-    if (_size != _bucket.size())
-        _bucket.resize(_size);
-    //reduce the data
-    MPI_Allreduce(_value.data(), _bucket.data(), _size, type_wrapper<T>{}, _operation, _comm);
-}
-#pragma endregion
-#pragma region MPI gather
-//declarations
-auto gather_impl(int _dest, MPI_Comm _comm, const std::string &_value, std::string &_bucket) -> void;
-auto gather_impl(int _dest, MPI_Comm _comm, const char *_value, std::string &_bucket) -> void;
-//templates
-template <class T>
-auto gather_impl(int _dest, MPI_Comm _comm, const std::vector<T> &_value, std::vector<T> &_bucket) -> void
-{
-    paranoidly_assert((initialized()));
-    paranoidly_assert((!finalized()));
-    //get current rank
-    auto _rank = comm(_comm)->rank();
-    //get world size
-    auto _size = comm(_comm)->size();
-    //broadcast the chunk_size before the data is gathered
-    auto _chunk_size = (_rank == _dest) ? static_cast<int>(_value.size()) : int{};
-    comm(_comm)->source(_dest)->bcast(_chunk_size);
-    //check size
-    assert((_value.size() == _chunk_size));
-    //resize bucket to take all elements
-    if (_rank == _dest)
-    {
-        if (_size * _chunk_size != _bucket.size())
-            _bucket.resize(_size * _chunk_size);
-    }
-    //gather the data
-    MPI_Gather(_value.data(), _chunk_size, type_wrapper<T>{}, _bucket.data(), _chunk_size, type_wrapper<T>{}, _dest, _comm);
-}
-#pragma endregion
-#pragma region MPI allgather
-//declarations
-auto allgather_impl(MPI_Comm _comm, const std::string &_value, std::string &_bucket) -> void;
-auto allgather_impl(MPI_Comm _comm, const char *_value, std::string &_bucket) -> void;
-//templates
-template <class T>
-auto allgather_impl(MPI_Comm _comm, const std::vector<T> &_value, std::vector<T> &_bucket) -> void
-{
-    paranoidly_assert((initialized()));
-    paranoidly_assert((!finalized()));
-    //get current rank
-    auto _rank = comm(_comm)->rank();
-    //get world size
-    auto _size = comm(_comm)->size();
-    //broadcast the chunk_size before the data is gathered
-    auto _chunk_size = (_rank == 0) ? static_cast<int>(_value.size()) : int{};
-    comm(_comm)->source(0)->bcast(_chunk_size);
-    //check size
-    assert((_value.size() == _chunk_size));
-    //resize bucket to take all elements
-    if (_size * _chunk_size != _bucket.size())
-        _bucket.resize(_size * _chunk_size);
-    //gather the data
-    MPI_Allgather(_value.data(), _chunk_size, type_wrapper<T>{}, _bucket.data(), _chunk_size, type_wrapper<T>{}, _comm);
-}
-#pragma endregion
-#pragma region MPI scatter
+#pragma region scatter
 //declarations
 auto scatter_impl(int _source, MPI_Comm _comm, const std::string &_value, std::string &_bucket, const size_t _chunk_size) -> void;
 //templates
@@ -253,7 +307,7 @@ auto scatter_impl(int _source, MPI_Comm _comm, const std::vector<T> &_value, std
     MPI_Scatter(_value.data(), _chunk_size, type_wrapper<T>{}, _bucket.data(), _chunk_size, type_wrapper<T>{}, _source, _comm);
 }
 #pragma endregion
-#pragma region MPI send
+#pragma region send
 //declarations
 auto send_impl(int _dest, int _tag, MPI_Comm _comm, const std::string &_value) -> void;
 auto send_impl(int _dest, int _tag, MPI_Comm _comm, const char *_value) -> void;
@@ -273,7 +327,7 @@ auto send_impl(int _dest, int _tag, MPI_Comm _comm, const std::vector<T> &_value
     MPI_Send(_value.data(), _value.size(), type_wrapper<T>{}, _dest, _tag, _comm);
 }
 #pragma endregion
-#pragma region MPI synchronized send
+#pragma region synchronized send
 //declarations
 auto ssend_impl(int _dest, int _tag, MPI_Comm _comm, const std::string &_value) -> void;
 auto ssend_impl(int _dest, int _tag, MPI_Comm _comm, const char *_value) -> void;
@@ -293,7 +347,7 @@ auto ssend_impl(int _dest, int _tag, MPI_Comm _comm, const std::vector<T> &_valu
     MPI_Ssend(_value.data(), _value.size(), type_wrapper<T>{}, _dest, _tag, _comm);
 }
 #pragma endregion
-#pragma region MPI ready mode send
+#pragma region ready mode send
 //declarations
 auto rsend_impl(int _dest, int _tag, MPI_Comm _comm, const std::string &_value) -> void;
 auto rsend_impl(int _dest, int _tag, MPI_Comm _comm, const char *_value) -> void;
@@ -313,103 +367,8 @@ auto rsend_impl(int _dest, int _tag, MPI_Comm _comm, const std::vector<T> &_valu
     MPI_Rsend(_value.data(), _value.size(), type_wrapper<T>{}, _dest, _tag, _comm);
 }
 #pragma endregion
-#pragma region MPI receive
-//declarations
-auto recv_impl(int _source, int _tag, MPI_Comm _comm, MPI_Status *_status, std::string &_value) -> void;
-//templates
-template <class T>
-auto recv_impl(int _source, int _tag, MPI_Comm _comm, MPI_Status *_status, T &_value) -> void
-{
-    paranoidly_assert((initialized()));
-    paranoidly_assert((!finalized()));
-    MPI_Recv(&_value, 1, type_wrapper<T>{}, _source, _tag, _comm, _status);
-}
-template <class T>
-auto recv_impl(int _source, int _tag, MPI_Comm _comm, MPI_Status *_status, std::vector<T> &_value) -> void
-{
-    paranoidly_assert((initialized()));
-    paranoidly_assert((!finalized()));
-    //we need to finde the proper size of the incoming data
-    MPI_Probe(_source, _tag, _comm, _status);
-    auto _size = int{};
-    MPI_Get_count(_status, type_wrapper<T>{}, &_size);
-    //we need to allocate some memory for it
-    _value.resize(_size);
-    //we need to receive it
-    MPI_Recv(_value.data(), _size, type_wrapper<T>{}, _source, _tag, _comm, _status);
-}
-#pragma endregion
-#pragma region MPI broadcast
-//declarations
-auto bcast_impl(int _source, MPI_Comm _comm, std::string &_value) -> void;
-//templates
-template <class T>
-auto bcast_impl(int _source, MPI_Comm _comm, T &_value) -> void
-{
-    paranoidly_assert((initialized()));
-    paranoidly_assert((!finalized()));
-    MPI_Bcast(&_value, 1, type_wrapper<T>{}, _source, _comm);
-}
-template <class T>
-auto bcast_impl(int _source, MPI_Comm _comm, std::vector<T> &_value) -> void
-{
-    paranoidly_assert((initialized()));
-    paranoidly_assert((!finalized()));
-    //get current rank
-    auto _rank = comm(_comm)->rank();
-    //broadcast the size before the data
-    auto _size = (_rank == _source) ? static_cast<int>(_value.size()) : int{};
-    comm(_comm)->source(_source)->bcast(_size);
-    //resize the vector if not the sender
-    if (_rank != _source)
-        _value.resize(_size);
-    //broadcast the data
-    MPI_Bcast(_value.data(), _size, type_wrapper<T>{}, _source, _comm);
-}
-#pragma endregion
-#pragma region MPI Operation wrapper
-template <class T, class Op>
-auto op_proxy<T, Op>::wrapper(void *void_a, void *void_b, int *len, MPI_Datatype *) -> void
-{
-    auto a = static_cast<T *>(void_a);
-    auto b = static_cast<T *>(void_b);
-    auto op = impl::lambda_hack_impl<Op>{}.get();
-    std::transform(a, a + *len, b, b, op);
-}
-template <class T, class Op>
-op_proxy<T, Op>::op_proxy(Op, const bool _commute) : _commute(_commute)
-{
-    paranoidly_assert((initialized()));
-    paranoidly_assert((!finalized()));
 
-    MPI_Op_create(op_proxy<T, Op>::wrapper, _commute, &_operation);
-}
-template <class T, class Op>
-op_proxy<T, Op>::~op_proxy()
-{
-    paranoidly_assert((initialized()));
-    paranoidly_assert((!finalized()));
-
-    MPI_Op_free(&_operation);
-}
-template <class T, class Op>
-auto op_proxy<T, Op>::op() const -> const MPI_Op &
-{
-    return _operation;
-}
-template <class T, class Op>
-auto op_proxy<T, Op>::commutes() const -> bool
-{
-    return _commute;
-}
-
-template <class T, class Op>
-auto make_op(Op _func, const bool _commute) -> std::unique_ptr<op_proxy<T, Op>>
-{
-    return std::make_unique<op_proxy<T, Op>>(_func, _commute);
-}
-#pragma endregion
-#pragma region MPI communicator
+#pragma region communicator
 template <class T>
 auto communicator::allgather(const T &_value, std::vector<T> &_bucket) -> void
 {
@@ -532,7 +491,113 @@ auto communicator::allreduce(const std::string &_value, const op_proxy<std::stri
     return allreduce(_value, _operation->op());
 }
 #pragma endregion
-#pragma region MPI sender
+#pragma region operation wrapper
+template <class T, class Op>
+auto op_proxy<T, Op>::wrapper(void *void_a, void *void_b, int *len, MPI_Datatype *) -> void
+{
+    auto a = static_cast<T *>(void_a);
+    auto b = static_cast<T *>(void_b);
+    auto op = impl::lambda_hack_impl<Op>{}.get();
+    std::transform(a, a + *len, b, b, op);
+}
+template <class T, class Op>
+op_proxy<T, Op>::op_proxy(Op, const bool _commute) : _commute(_commute)
+{
+    paranoidly_assert((initialized()));
+    paranoidly_assert((!finalized()));
+
+    MPI_Op_create(op_proxy<T, Op>::wrapper, _commute, &_operation);
+}
+template <class T, class Op>
+op_proxy<T, Op>::~op_proxy()
+{
+    paranoidly_assert((initialized()));
+    paranoidly_assert((!finalized()));
+
+    MPI_Op_free(&_operation);
+}
+template <class T, class Op>
+auto op_proxy<T, Op>::op() const -> const MPI_Op &
+{
+    return _operation;
+}
+template <class T, class Op>
+auto op_proxy<T, Op>::commutes() const -> bool
+{
+    return _commute;
+}
+
+template <class T, class Op>
+auto make_op(Op _func, const bool _commute) -> std::unique_ptr<op_proxy<T, Op>>
+{
+    return std::make_unique<op_proxy<T, Op>>(_func, _commute);
+}
+#pragma endregion
+#pragma region receiver
+template <class T>
+auto receiver::recv() -> T
+{
+    auto _value = T{};
+    recv(_value);
+    return _value;
+}
+template <class T>
+auto receiver::recv(T &_value) -> void
+{
+    recv_impl(_source, _tag, _comm, &_status, _value);
+}
+
+template <class T>
+auto receiver::bcast(T &_value) -> void
+{
+    bcast_impl(_source, _comm, _value);
+}
+template <class R, class T>
+auto receiver::bcast(const T &_value) -> std::enable_if_t<std::is_same<R, T>::value, T>
+{
+    auto _bucket = _value;
+    bcast(_bucket);
+    return _bucket;
+}
+template <class R, class T>
+auto receiver::bcast(const std::vector<T> &_value) -> std::enable_if_t<std::is_same<R, std::vector<T>>::value, std::vector<T>>
+{
+    auto _bucket = _value;
+    bcast(_bucket);
+    return _bucket;
+}
+template <class R>
+auto receiver::bcast(const char _value) -> std::enable_if_t<std::is_same<R, std::string>::value, std::string>
+{
+    return bcast<R>(std::string{_value});
+}
+template <class R>
+auto receiver::bcast(const char *_value) -> std::enable_if_t<std::is_same<R, std::string>::value, std::string>
+{
+    return bcast<R>(std::string{_value});
+}
+template <class R>
+auto receiver::bcast(const std::string &_value) -> std::enable_if_t<std::is_same<R, std::string>::value, std::string>
+{
+    auto _bucket = _value;
+    bcast(_bucket);
+    return _bucket;
+}
+
+template <class T>
+auto receiver::scatter(const std::vector<T> &_value, std::vector<T> &_bucket, const size_t _chunk_size) -> void
+{
+    return scatter_impl(_source, _comm, _value, _bucket, _chunk_size);
+}
+template <class T>
+auto receiver::scatter(const std::vector<T> &_value, const size_t _chunk_size) -> std::vector<T>
+{
+    auto _bucket = std::vector<T>{};
+    scatter(_value, _bucket, _chunk_size);
+    return _bucket;
+}
+#pragma endregion
+#pragma region sender
 template <class T>
 auto sender::send(const T &_value) -> void
 {
@@ -661,70 +726,6 @@ template <class Op>
 auto sender::reduce(const std::string &_value, const op_proxy<std::string, Op> *_operation) -> std::string
 {
     return reduce(_value, _operation->op());
-}
-#pragma endregion
-#pragma region MPI receiver
-template <class T>
-auto receiver::recv() -> T
-{
-    auto _value = T{};
-    recv(_value);
-    return _value;
-}
-template <class T>
-auto receiver::recv(T &_value) -> void
-{
-    recv_impl(_source, _tag, _comm, &_status, _value);
-}
-
-template <class T>
-auto receiver::bcast(T &_value) -> void
-{
-    bcast_impl(_source, _comm, _value);
-}
-template <class R, class T>
-auto receiver::bcast(const T &_value) -> std::enable_if_t<std::is_same<R, T>::value, T>
-{
-    auto _bucket = _value;
-    bcast(_bucket);
-    return _bucket;
-}
-template <class R, class T>
-auto receiver::bcast(const std::vector<T> &_value) -> std::enable_if_t<std::is_same<R, std::vector<T>>::value, std::vector<T>>
-{
-    auto _bucket = _value;
-    bcast(_bucket);
-    return _bucket;
-}
-template <class R>
-auto receiver::bcast(const char _value) -> std::enable_if_t<std::is_same<R, std::string>::value, std::string>
-{
-    return bcast<R>(std::string{_value});
-}
-template <class R>
-auto receiver::bcast(const char *_value) -> std::enable_if_t<std::is_same<R, std::string>::value, std::string>
-{
-    return bcast<R>(std::string{_value});
-}
-template <class R>
-auto receiver::bcast(const std::string &_value) -> std::enable_if_t<std::is_same<R, std::string>::value, std::string>
-{
-    auto _bucket = _value;
-    bcast(_bucket);
-    return _bucket;
-}
-
-template <class T>
-auto receiver::scatter(const std::vector<T> &_value, std::vector<T> &_bucket, const size_t _chunk_size) -> void
-{
-    return scatter_impl(_source, _comm, _value, _bucket, _chunk_size);
-}
-template <class T>
-auto receiver::scatter(const std::vector<T> &_value, const size_t _chunk_size) -> std::vector<T>
-{
-    auto _bucket = std::vector<T>{};
-    scatter(_value, _bucket, _chunk_size);
-    return _bucket;
 }
 #pragma endregion
 } // namespace mpi
