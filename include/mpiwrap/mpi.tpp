@@ -163,7 +163,7 @@ auto recv_impl(int _source, int _tag, MPI_Comm _comm, MPI_Status *_status, std::
 {
     paranoidly_assert((initialized()));
     paranoidly_assert((!finalized()));
-    //we need to finde the proper size of the incoming data
+    //we need to find the proper size of the incoming data
     MPI_Probe(_source, _tag, _comm, _status);
     auto _size = int{};
     MPI_Get_count(_status, type_wrapper<T>{}, &_size);
@@ -313,7 +313,7 @@ auto send_impl(int _dest, int _tag, MPI_Comm _comm, const std::string &_value) -
 auto send_impl(int _dest, int _tag, MPI_Comm _comm, const char *_value) -> void;
 //templates
 template <class T>
-auto send_impl(int _dest, int _tag, MPI_Comm _comm, const T _value) -> void
+auto send_impl(int _dest, int _tag, MPI_Comm _comm, const T &_value) -> void
 {
     paranoidly_assert((initialized()));
     paranoidly_assert((!finalized()));
@@ -333,7 +333,7 @@ auto ssend_impl(int _dest, int _tag, MPI_Comm _comm, const std::string &_value) 
 auto ssend_impl(int _dest, int _tag, MPI_Comm _comm, const char *_value) -> void;
 //templates
 template <class T>
-auto ssend_impl(int _dest, int _tag, MPI_Comm _comm, const T _value) -> void
+auto ssend_impl(int _dest, int _tag, MPI_Comm _comm, const T &_value) -> void
 {
     paranoidly_assert((initialized()));
     paranoidly_assert((!finalized()));
@@ -353,7 +353,7 @@ auto rsend_impl(int _dest, int _tag, MPI_Comm _comm, const std::string &_value) 
 auto rsend_impl(int _dest, int _tag, MPI_Comm _comm, const char *_value) -> void;
 //templates
 template <class T>
-auto rsend_impl(int _dest, int _tag, MPI_Comm _comm, const T _value) -> void
+auto rsend_impl(int _dest, int _tag, MPI_Comm _comm, const T &_value) -> void
 {
     paranoidly_assert((initialized()));
     paranoidly_assert((!finalized()));
@@ -365,6 +365,53 @@ auto rsend_impl(int _dest, int _tag, MPI_Comm _comm, const std::vector<T> &_valu
     paranoidly_assert((initialized()));
     paranoidly_assert((!finalized()));
     MPI_Rsend(_value.data(), _value.size(), type_wrapper<T>{}, _dest, _tag, _comm);
+}
+#pragma endregion
+
+#pragma region nonblocking receive
+//declarations
+auto irecv_impl(int _source, int _tag, MPI_Comm _comm, MPI_Status *_status, MPI_Request *_request, std::unique_ptr<char[]> &_value) -> void;
+//templates
+template <class T>
+auto irecv_impl(int _source, int _tag, MPI_Comm _comm, MPI_Status *_status, MPI_Request *_request, T &_value) -> void
+{
+    paranoidly_assert((initialized()));
+    paranoidly_assert((!finalized()));
+    MPI_Irecv(&_value, 1, type_wrapper<T>{}, _source, _tag, _comm, _request);
+}
+template <class T>
+auto irecv_impl(int _source, int _tag, MPI_Comm _comm, MPI_Status *_status, MPI_Request *_request, std::vector<T> &_value) -> void
+{
+    paranoidly_assert((initialized()));
+    paranoidly_assert((!finalized()));
+    //we need to find the proper size of the incoming data
+    MPI_Probe(_source, _tag, _comm, _status);
+    auto _size = int{};
+    MPI_Get_count(_status, type_wrapper<T>{}, &_size);
+    //we need to allocate some memory for it
+    _value.resize(_size);
+    //we need to receive it
+    MPI_Irecv(_value.data(), _size, type_wrapper<T>{}, _source, _tag, _comm, _request);
+}
+#pragma endregion
+#pragma region nonblocking send
+//declarations
+auto isend_impl(int _dest, int _tag, MPI_Comm _comm, MPI_Request *_request, const std::string &_value) -> void;
+auto isend_impl(int _dest, int _tag, MPI_Comm _comm, MPI_Request *_request, const char *_value) -> void;
+//templates
+template <class T>
+auto isend_impl(int _dest, int _tag, MPI_Comm _comm, MPI_Request *_request, const T &_value) -> void
+{
+    paranoidly_assert((initialized()));
+    paranoidly_assert((!finalized()));
+    MPI_Isend(&_value, 1, type_wrapper<T>{}, _dest, _tag, _comm, _request);
+}
+template <class T>
+auto isend_impl(int _dest, int _tag, MPI_Comm _comm, MPI_Request *_request, const std::vector<T> &_value) -> void
+{
+    paranoidly_assert((initialized()));
+    paranoidly_assert((!finalized()));
+    MPI_Isend(_value.data(), _value.size(), type_wrapper<T>{}, _dest, _tag, _comm, _request);
 }
 #pragma endregion
 
@@ -533,6 +580,93 @@ auto make_op(Op _func, const bool _commute) -> std::unique_ptr<op_proxy<T, Op>>
     return std::make_unique<op_proxy<T, Op>>(_func, _commute);
 }
 #pragma endregion
+#pragma region request implementations
+template <class T>
+isend_request<T>::isend_request(int _dest, int _tag, MPI_Comm _comm, const T &_value) : request(_comm), _dest(_dest), _tag(_tag), _value(_value)
+{
+    isend_impl(this->_dest, this->_tag, this->_comm, &this->_request, this->_value);
+}
+template <class T>
+irecv_request<T>::irecv_request(int _source, int _tag, MPI_Comm _comm, T &_value) : request(_comm), _source(_source), _tag(_tag)
+{
+    irecv_impl(this->_source, this->_tag, this->_comm, &this->_status, &this->_request, this->_bucket);
+}
+template <class T>
+irecv_reply<T>::irecv_reply(int _source, int _tag, MPI_Comm _comm) : request(_comm), _source(_source), _tag(_tag), _bucket(T{})
+{
+    irecv_impl(this->_source, this->_tag, this->_comm, &this->_status, &this->_request, this->_bucket);
+}
+template <class T>
+auto irecv_reply<T>::get() -> T
+{
+    this->wait();
+    return _bucket;
+}
+#pragma endregion
+#pragma region test
+template <class... T>
+auto testall(std::unique_ptr<T> &... _values) -> bool
+{
+    return testall(std::vector<request *>{_values.get()...});
+}
+template <class... T>
+auto testall(T *... _values) -> bool
+{
+    return testall(std::vector<request *>{_values...});
+}
+template <class... T>
+auto testany(std::unique_ptr<T> &... _values) -> std::vector<size_t>
+{
+    return testany(std::vector<request *>{_values.get()...});
+}
+template <class... T>
+auto testany(T *... _values) -> std::vector<size_t>
+{
+    return testany(std::vector<request *>{_values...});
+}
+template <class... T>
+auto testsome(std::unique_ptr<T> &... _values) -> std::vector<size_t>
+{
+    return testsome(std::vector<request *>{_values.get()...});
+}
+template <class... T>
+auto testsome(T *... _values) -> std::vector<size_t>
+{
+    return testsome(std::vector<request *>{_values...});
+}
+#pragma endregion
+#pragma region wait
+template <class... T>
+auto waitall(std::unique_ptr<T> &... _values) -> void
+{
+    waitall(std::vector<request *>{_values.get()...});
+}
+template <class... T>
+auto waitall(T *... _values) -> void
+{
+    waitall(std::vector<request *>{_values...});
+}
+template <class... T>
+auto waitany(std::unique_ptr<T> &... _values) -> std::vector<size_t>
+{
+    return waitany(std::vector<request *>{_values.get()...});
+}
+template <class... T>
+auto waitany(T *... _values) -> std::vector<size_t>
+{
+    return waitany(std::vector<request *>{_values...});
+}
+template <class... T>
+auto waitsome(std::unique_ptr<T> &... _values) -> std::vector<size_t>
+{
+    return waitsome(std::vector<request *>{_values.get()...});
+}
+template <class... T>
+auto waitsome(T *... _values) -> std::vector<size_t>
+{
+    return waitsome(std::vector<request *>{_values...});
+}
+#pragma endregion
 #pragma region receiver
 template <class T>
 auto receiver::recv() -> T
@@ -545,6 +679,16 @@ template <class T>
 auto receiver::recv(T &_value) -> void
 {
     recv_impl(_source, _tag, _comm, &_status, _value);
+}
+template <class T>
+auto receiver::irecv() -> std::unique_ptr<irecv_reply<T>>
+{
+    return std::make_unique<irecv_reply<T>>(_source, _tag, _comm);
+}
+template <class T>
+auto receiver::irecv(T &_value) -> std::unique_ptr<irecv_request<T>>
+{
+    return std::make_unique<irecv_request<T>>(_source, _tag, _comm, _value);
 }
 
 template <class T>
@@ -627,6 +771,17 @@ template <class T>
 auto sender::rsend(const std::vector<T> &_value) -> void
 {
     return rsend_impl(_dest, _tag, _comm, _value);
+}
+
+template <class T>
+auto sender::isend(const T &_value) -> std::unique_ptr<isend_request<T>>
+{
+    return std::make_unique<isend_request<T>>(_dest, _tag, _comm, _value);
+}
+template <class T>
+auto sender::isend(const std::vector<T> &_value) -> std::unique_ptr<isend_request<std::vector<T>>>
+{
+    return std::make_unique<isend_request<std::vector<T>>>(_dest, _tag, _comm, _value);
 }
 
 template <class T>

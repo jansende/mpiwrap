@@ -1,19 +1,20 @@
 #include <mpiwrap/mpi.h>
+#include <algorithm>
 
 namespace mpi
 {
 #pragma region free functions
 auto initialized() -> bool
 {
-    auto flag = int{};
-    MPI_Initialized(&flag);
-    return flag == true;
+    auto _flag = int{};
+    MPI_Initialized(&_flag);
+    return _flag == true;
 }
 auto finalized() -> bool
 {
-    auto flag = int{};
-    MPI_Finalized(&flag);
-    return flag == true;
+    auto _flag = int{};
+    MPI_Finalized(&_flag);
+    return _flag == true;
 }
 auto processor_name() -> std::string
 {
@@ -193,7 +194,7 @@ auto recv_impl(int _source, int _tag, MPI_Comm _comm, MPI_Status *_status, std::
 {
     paranoidly_assert((initialized()));
     paranoidly_assert((!finalized()));
-    //we need to finde the proper size of the incoming string
+    //we need to find the proper size of the incoming string
     MPI_Probe(_source, _tag, _comm, _status);
     auto _size = int{};
     MPI_Get_count(_status, MPI_CHAR, &_size);
@@ -313,6 +314,36 @@ auto rsend_impl(int _dest, int _tag, MPI_Comm _comm, const std::string &_value) 
 auto rsend_impl(int _dest, int _tag, MPI_Comm _comm, const char *_value) -> void
 {
     rsend_impl(_dest, _tag, _comm, std::string{_value});
+}
+#pragma endregion
+
+#pragma region nonblocking receive
+auto irecv_impl(int _source, int _tag, MPI_Comm _comm, MPI_Status *_status, MPI_Request *_request, std::unique_ptr<char[]> &_value) -> void
+{
+    paranoidly_assert((initialized()));
+    paranoidly_assert((!finalized()));
+    //we need to find the proper size of the incoming string
+    MPI_Probe(_source, _tag, _comm, _status);
+    auto _size = int{};
+    MPI_Get_count(_status, MPI_CHAR, &_size);
+    //we need to allocate some memory for it
+    _value = std::make_unique<char[]>(_size + 1);
+    //we need to receive it
+    MPI_Irecv(_value.get(), _size, MPI_CHAR, _source, _tag, _comm, _request);
+}
+#pragma endregion
+#pragma region nonblocking send
+auto isend_impl(int _dest, int _tag, MPI_Comm _comm, MPI_Request *_request, const std::string &_value) -> void
+{
+    paranoidly_assert((initialized()));
+    paranoidly_assert((!finalized()));
+    MPI_Isend(_value.c_str(), _value.size(), MPI_CHAR, _dest, _tag, _comm, _request);
+}
+auto isend_impl(int _dest, int _tag, MPI_Comm _comm, MPI_Request *_request, const char *_value) -> void
+{
+    paranoidly_assert((initialized()));
+    paranoidly_assert((!finalized()));
+    isend_impl(_dest, _tag, _comm, _request, std::string{_value});
 }
 #pragma endregion
 
@@ -507,6 +538,284 @@ auto communicator::operator!=(const MPI_Comm &rhs) -> bool
     return !(*this == rhs);
 }
 #pragma endregion
+#pragma region request
+request::request(MPI_Comm _comm) : _comm(_comm)
+{
+}
+request::~request()
+{
+}
+auto request::cancel() -> void
+{
+    if (!is_finished && !is_canceled)
+    {
+        MPI_Cancel(&this->_request);
+        is_canceled = true;
+    }
+}
+auto request::test() -> bool
+{
+    if (!is_finished && !is_canceled)
+    {
+        auto _flag = int{};
+        MPI_Test(&this->_request, &_flag, &this->_status);
+        is_finished = _flag == true;
+    }
+    return is_finished && !is_canceled;
+}
+auto request::wait() -> void
+{
+    if (!is_finished && !is_canceled)
+    {
+        MPI_Wait(&this->_request, &this->_status);
+        is_finished = true;
+    }
+}
+#pragma endregion
+#pragma region request implementations
+irecv_request<std::string>::irecv_request(int _source, int _tag, MPI_Comm _comm, std::string &_value) : request(_comm), _source(_source), _tag(_tag), _bucket(_value)
+{
+    irecv_impl(this->_source, this->_tag, this->_comm, &this->_status, &this->_request, this->_c_str);
+}
+auto irecv_request<std::string>::wait() -> void
+{
+    if (!this->is_finished && !this->is_canceled)
+    {
+        MPI_Wait(&this->_request, &this->_status);
+        this->is_finished = true;
+    }
+    this->_bucket = std::string{this->_c_str.get()};
+}
+irecv_reply<std::string>::irecv_reply(int _source, int _tag, MPI_Comm _comm) : request(_comm), _source(_source), _tag(_tag)
+{
+    irecv_impl(this->_source, this->_tag, this->_comm, &this->_status, &this->_request, this->_c_str);
+}
+auto irecv_reply<std::string>::get() -> std::string
+{
+    this->wait();
+    return std::string{this->_c_str.get()};
+}
+#pragma endregion
+#pragma region test
+auto test(request *_value) -> bool
+{
+    return _value->test();
+}
+auto test(std::unique_ptr<request> &_value) -> bool
+{
+    return test(_value.get());
+}
+auto testall(const std::vector<request *> &_values) -> bool
+{
+    //get requests and statuses in the right form
+    auto _requests = std::vector<MPI_Request>(_values.size());
+    auto _statuses = std::vector<MPI_Status>(_values.size());
+    std::transform(_values.begin(), _values.end(), _requests.begin(), [](auto &_value) { return _value->_request; });
+
+    //test
+    auto _flag = int{};
+    MPI_Testall(_values.size(), _requests.data(), &_flag, _statuses.data());
+
+    if (_flag == true)
+    {
+        //write back requests and statuses
+        for (auto i = size_t{0}; i < _values.size(); ++i)
+        {
+            _values[i]->_request = _requests[i];
+            _values[i]->_status = _statuses[i];
+        }
+        return true;
+    }
+    else
+    {
+        return false;
+    }
+}
+auto testall(const std::vector<std::unique_ptr<request>> &_values) -> bool
+{
+    auto _temp = std::vector<request *>(_values.size());
+    std::transform(_values.begin(), _values.end(), _temp.begin(), [](auto &val) { return val.get(); });
+    return testall(_temp);
+}
+auto testany(const std::vector<request *> &_values) -> std::vector<size_t>
+{
+    //get requests in the right form
+    auto _requests = std::vector<MPI_Request>(_values.size());
+    std::transform(_values.begin(), _values.end(), _requests.begin(), [](auto &_value) { return _value->_request; });
+
+    //test
+    auto _index = int{};
+    auto _flag = int{};
+    auto _status = MPI_Status{};
+    MPI_Testany(_values.size(), _requests.data(), &_index, &_flag, &_status);
+
+    if (_flag == true)
+    {
+        //write back requests
+        for (auto i = size_t{0}; i < _values.size(); ++i)
+        {
+            _values[i]->_request = _requests[i];
+        }
+        //write back status
+        _values[_index]->_status = _status;
+        //return index of completed request
+        return std::vector<size_t>{static_cast<size_t>(_index)};
+    }
+    else
+    {
+        return std::vector<size_t>{};
+    }
+}
+auto testany(const std::vector<std::unique_ptr<request>> &_values) -> std::vector<size_t>
+{
+    auto _temp = std::vector<request *>(_values.size());
+    std::transform(_values.begin(), _values.end(), _temp.begin(), [](auto &val) { return val.get(); });
+    return testany(_temp);
+}
+auto testsome(const std::vector<request *> &_values) -> std::vector<size_t>
+{
+    //get requests and statuses in the right form
+    auto _requests = std::vector<MPI_Request>(_values.size());
+    auto _statuses = std::vector<MPI_Status>(_values.size());
+    std::transform(_values.begin(), _values.end(), _requests.begin(), [](auto &_value) { return _value->_request; });
+
+    //test
+    auto _count = 0;
+    auto _indexes = std::vector<int>(_values.size());
+    MPI_Testsome(_values.size(), _requests.data(), &_count, _indexes.data(), _statuses.data());
+
+    if (_count > 0)
+    {
+        //write back requests
+        for (auto i = size_t{0}; i < _values.size(); ++i)
+        {
+            _values[i]->_request = _requests[i];
+        }
+        //write back statuses
+        for (auto i = size_t{0}; i < static_cast<size_t>(_count); ++i)
+        {
+            _values[_indexes[i]]->_status = _statuses[i];
+        }
+
+        //return indexes of completed request
+        auto _temp = std::vector<size_t>(_count);
+        std::transform(_indexes.begin(), _indexes.begin() + static_cast<size_t>(_count), _temp.begin(), [](auto val) { return static_cast<size_t>(val); });
+        return _temp;
+    }
+    else
+    {
+        return std::vector<size_t>{};
+    }
+}
+auto testsome(const std::vector<std::unique_ptr<request>> &_values) -> std::vector<size_t>
+{
+    auto _temp = std::vector<request *>(_values.size());
+    std::transform(_values.begin(), _values.end(), _temp.begin(), [](auto &val) { return val.get(); });
+    return testsome(_temp);
+}
+#pragma endregion
+#pragma region wait
+auto wait(request *_value) -> void
+{
+    return _value->wait();
+}
+auto wait(std::unique_ptr<request> &_value) -> void
+{
+    return wait(_value.get());
+}
+auto waitall(const std::vector<request *> &_values) -> void
+{
+    //get requests and statuses in the right form
+    auto _requests = std::vector<MPI_Request>(_values.size());
+    auto _statuses = std::vector<MPI_Status>(_values.size());
+    std::transform(_values.begin(), _values.end(), _requests.begin(), [](auto &_value) { return _value->_request; });
+
+    //wait
+    MPI_Waitall(_values.size(), _requests.data(), _statuses.data());
+
+    //write back requests and statuses
+    for (auto i = size_t{0}; i < _values.size(); ++i)
+    {
+        _values[i]->_request = _requests[i];
+        _values[i]->_status = _statuses[i];
+    }
+}
+auto waitall(const std::vector<std::unique_ptr<request>> &_values) -> void
+{
+    auto _temp = std::vector<request *>(_values.size());
+    std::transform(_values.begin(), _values.end(), _temp.begin(), [](auto &val) { return val.get(); });
+    return waitall(_temp);
+}
+auto waitany(const std::vector<request *> &_values) -> std::vector<size_t>
+{
+    //get requests in the right form
+    auto _requests = std::vector<MPI_Request>(_values.size());
+    std::transform(_values.begin(), _values.end(), _requests.begin(), [](auto &_value) { return _value->_request; });
+
+    //wait
+    auto _index = int{};
+    auto _status = MPI_Status{};
+    MPI_Waitany(_values.size(), _requests.data(), &_index, &_status);
+
+    //write back requests
+    for (auto i = size_t{0}; i < _values.size(); ++i)
+    {
+        _values[i]->_request = _requests[i];
+    }
+    //write back status
+    _values[_index]->_status = _status;
+
+    //return index of completed request
+    return std::vector<size_t>{static_cast<size_t>(_index)};
+}
+auto waitany(const std::vector<std::unique_ptr<request>> &_values) -> std::vector<size_t>
+{
+    auto _temp = std::vector<request *>(_values.size());
+    std::transform(_values.begin(), _values.end(), _temp.begin(), [](auto &val) { return val.get(); });
+    return waitany(_temp);
+}
+auto waitsome(const std::vector<request *> &_values) -> std::vector<size_t>
+{
+    //get requests and statuses in the right form
+    auto _requests = std::vector<MPI_Request>(_values.size());
+    auto _statuses = std::vector<MPI_Status>(_values.size());
+    std::transform(_values.begin(), _values.end(), _requests.begin(), [](auto &_value) { return _value->_request; });
+
+    //wait
+    auto _count = 0;
+    auto _indexes = std::vector<int>(_values.size());
+    MPI_Waitsome(_values.size(), _requests.data(), &_count, _indexes.data(), _statuses.data());
+
+    if (_count > 0)
+    {
+        //write back requests
+        for (auto i = size_t{0}; i < _values.size(); ++i)
+        {
+            _values[i]->_request = _requests[i];
+        }
+        //write back statuses
+        for (auto i = size_t{0}; i < static_cast<size_t>(_count); ++i)
+        {
+            _values[_indexes[i]]->_status = _statuses[i];
+        }
+
+        //return indexes of completed request
+        auto _temp = std::vector<size_t>(_count);
+        std::transform(_indexes.begin(), _indexes.begin() + static_cast<size_t>(_count), _temp.begin(), [](auto val) { return static_cast<size_t>(val); });
+        return _temp;
+    }
+    else
+    {
+        return std::vector<size_t>{};
+    }
+}
+auto waitsome(const std::vector<std::unique_ptr<request>> &_values) -> std::vector<size_t>
+{
+    auto _temp = std::vector<request *>(_values.size());
+    std::transform(_values.begin(), _values.end(), _temp.begin(), [](auto &val) { return val.get(); });
+    return waitsome(_temp);
+}
+#pragma endregion
 #pragma region receiver
 receiver::receiver(int _source, int _tag, MPI_Comm _comm) : _source(_source), _tag(_tag), _comm(_comm)
 {
@@ -589,6 +898,19 @@ auto sender::rsend(const char *_value) -> void
 auto sender::rsend(const std::string &_value) -> void
 {
     return rsend_impl(_dest, _tag, _comm, _value);
+}
+
+auto sender::isend(const char _value) -> std::unique_ptr<isend_request<std::string>>
+{
+    return isend(std::string{_value});
+}
+auto sender::isend(const char *_value) -> std::unique_ptr<isend_request<std::string>>
+{
+    return isend(std::string{_value});
+}
+auto sender::isend(const std::string &_value) -> std::unique_ptr<isend_request<std::string>>
+{
+    return std::make_unique<isend_request<std::string>>(_dest, _tag, _comm, _value);
 }
 
 auto sender::gather(const char _value, std::string &_bucket) -> void

@@ -274,6 +274,132 @@ public:
 template <class T, class Op>
 auto make_op(Op _func, const bool _commute = false) -> std::unique_ptr<op_proxy<T, Op>>;
 #pragma endregion
+#pragma region request
+class request
+{
+    friend auto testall(const std::vector<request *> &_values) -> bool;
+    friend auto testany(const std::vector<request *> &_values) -> std::vector<size_t>;
+    friend auto testsome(const std::vector<request *> &_values) -> std::vector<size_t>;
+
+    friend auto waitall(const std::vector<request *> &_values) -> void;
+    friend auto waitany(const std::vector<request *> &_values) -> std::vector<size_t>;
+    friend auto waitsome(const std::vector<request *> &_values) -> std::vector<size_t>;
+
+protected:
+    MPI_Comm _comm;
+    MPI_Request _request;
+    MPI_Status _status;
+    bool is_finished = false;
+    bool is_canceled = false;
+
+    request(MPI_Comm _comm);
+    virtual ~request();
+
+public:
+    virtual auto cancel() -> void;
+    virtual auto test() -> bool;
+    virtual auto wait() -> void;
+};
+#pragma endregion
+#pragma region request implementations
+template <class T>
+class isend_request : public request
+{
+private:
+    int _dest;
+    int _tag;
+    T _value;
+
+public:
+    isend_request(int _dest, int _tag, MPI_Comm _comm, const T &_value);
+};
+template <class T>
+class irecv_request : public request
+{
+private:
+    int _source;
+    int _tag;
+
+public:
+    irecv_request(int _source, int _tag, MPI_Comm _comm, T &_value);
+};
+template <>
+class irecv_request<std::string> : public request
+{
+private:
+    int _source;
+    int _tag;
+    std::unique_ptr<char[]> _c_str;
+    std::string &_bucket;
+
+public:
+    irecv_request(int _source, int _tag, MPI_Comm _comm, std::string &_value);
+    virtual auto wait() -> void;
+};
+
+template <class T>
+class irecv_reply : public request
+{
+private:
+    int _source;
+    int _tag;
+    T _bucket;
+
+public:
+    irecv_reply(int _source, int _tag, MPI_Comm _comm);
+    auto get() -> T;
+};
+template <>
+class irecv_reply<std::string> : public request
+{
+private:
+    int _source;
+    int _tag;
+    std::unique_ptr<char[]> _c_str;
+
+public:
+    irecv_reply(int _source, int _tag, MPI_Comm _comm);
+    auto get() -> std::string;
+};
+#pragma endregion
+#pragma region test
+auto test(request *_value) -> bool;
+auto test(std::unique_ptr<request> &_value) -> bool;
+auto testall(const std::vector<std::unique_ptr<request>> &_values) -> bool;
+template <class... T>
+auto testall(std::unique_ptr<T> &... _values) -> bool;
+template <class... T>
+auto testall(T *... _values) -> bool;
+auto testany(const std::vector<std::unique_ptr<request>> &_values) -> std::vector<size_t>;
+template <class... T>
+auto testany(std::unique_ptr<T> &... _values) -> std::vector<size_t>;
+template <class... T>
+auto testany(T *... _values) -> std::vector<size_t>;
+auto testsome(const std::vector<std::unique_ptr<request>> &_values) -> std::vector<size_t>;
+template <class... T>
+auto testsome(std::unique_ptr<T> &... _values) -> std::vector<size_t>;
+template <class... T>
+auto testsome(T *... _values) -> std::vector<size_t>;
+#pragma endregion
+#pragma region wait
+auto wait(request *_value) -> void;
+auto wait(std::unique_ptr<request> &_value) -> void;
+auto waitall(const std::vector<std::unique_ptr<request>> &_values) -> void;
+template <class... T>
+auto waitall(std::unique_ptr<T> &... _values) -> void;
+template <class... T>
+auto waitall(T *... _values) -> void;
+auto waitany(const std::vector<std::unique_ptr<request>> &_values) -> std::vector<size_t>;
+template <class... T>
+auto waitany(std::unique_ptr<T> &... _values) -> std::vector<size_t>;
+template <class... T>
+auto waitany(T *... _values) -> std::vector<size_t>;
+auto waitsome(const std::vector<std::unique_ptr<request>> &_values) -> std::vector<size_t>;
+template <class... T>
+auto waitsome(std::unique_ptr<T> &... _values) -> std::vector<size_t>;
+template <class... T>
+auto waitsome(T *... _values) -> std::vector<size_t>;
+#pragma endregion
 #pragma region receiver
 class receiver
 {
@@ -293,6 +419,10 @@ public:
     auto recv(T &_value) -> void;
     template <class T>
     auto recv() -> T;
+    template <class T>
+    auto irecv(T &_value) -> std::unique_ptr<irecv_request<T>>;
+    template <class T>
+    auto irecv() -> std::unique_ptr<irecv_reply<T>>;
 
     template <class T>
     auto bcast(T &_value) -> void;
@@ -352,6 +482,14 @@ public:
     auto rsend(const char _value) -> void;
     auto rsend(const char *_value) -> void;
     auto rsend(const std::string &_value) -> void;
+
+    template <class T>
+    auto isend(const T &_value) -> std::unique_ptr<isend_request<T>>;
+    template <class T>
+    auto isend(const std::vector<T> &_value) -> std::unique_ptr<isend_request<std::vector<T>>>;
+    auto isend(const char _value) -> std::unique_ptr<isend_request<std::string>>;
+    auto isend(const char *_value) -> std::unique_ptr<isend_request<std::string>>;
+    auto isend(const std::string &_value) -> std::unique_ptr<isend_request<std::string>>;
 
     template <class T>
     auto gather(const T &_value, std::vector<T> &_bucket) -> void;

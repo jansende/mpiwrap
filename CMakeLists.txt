@@ -11,7 +11,7 @@ project(mpiwrap VERSION 0.1.0
                 LANGUAGES CXX)
 
 #add library
-add_library(mpiwrap src/mpi.cpp)
+add_library(mpiwrap src/mpi.cpp src/scheduler.cpp)
 #add header files
 target_include_directories(mpiwrap PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/include)
 
@@ -45,12 +45,18 @@ if (MPIWRAP_EXAMPLES_ENABLED)
     target_link_libraries(bcast PRIVATE mpiwrap)
     add_executable(hello_mpi examples/hello_mpi.cpp)
     target_link_libraries(hello_mpi PRIVATE mpiwrap)
+    add_executable(isend_irecv examples/isend_irecv.cpp)
+    target_link_libraries(isend_irecv PRIVATE mpiwrap)
+    add_executable(isend_irecv_alt examples/isend_irecv_alt.cpp)
+    target_link_libraries(isend_irecv_alt PRIVATE mpiwrap)
     add_executable(make_op examples/make_op.cpp)
     target_link_libraries(make_op PRIVATE mpiwrap)
     add_executable(reduce examples/reduce.cpp)
     target_link_libraries(reduce PRIVATE mpiwrap)
     add_executable(scatter_gather examples/scatter_gather.cpp)
     target_link_libraries(scatter_gather PRIVATE mpiwrap)
+    add_executable(scheduler examples/scheduler.cpp)
+    target_link_libraries(scheduler PRIVATE mpiwrap)
     add_executable(send_recv examples/send_recv.cpp)
     target_link_libraries(send_recv PRIVATE mpiwrap)
 endif()

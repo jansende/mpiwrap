@@ -256,7 +256,7 @@ This is a list of the currently implemented MPI functions, and their usage with 
 | MPI_Intercomm_create           | :x:                |         |                                                                        |
 | MPI_Intercomm_merge            | :x:                |         |                                                                        |
 | MPI_Iprobe                     | :x:                |         |                                                                        |
-| MPI_Irecv                      | :x:                |         |                                                                        |
+| MPI_Irecv                      | :heavy_check_mark: |         | `mpi::comm([COMM])->source([RANK])->irecv([BUCKET])`                   |
 | MPI_Ireduce                    | :x:                |         |                                                                        |
 | MPI_Ireduce_scatter            | :x:                |         |                                                                        |
 | MPI_Ireduce_scatter_block      | :x:                |         |                                                                        |
@@ -265,7 +265,7 @@ This is a list of the currently implemented MPI functions, and their usage with 
 | MPI_Iscan                      | :x:                |         |                                                                        |
 | MPI_Iscatter                   | :x:                |         |                                                                        |
 | MPI_Iscatterv                  | :x:                |         |                                                                        |
-| MPI_Isend                      | :x:                |         |                                                                        |
+| MPI_Isend                      | :heavy_check_mark: |         | `mpi::comm([COMM])->dest([RANK])->isend([VALUE])`                      |
 | MPI_Issend                     | :x:                |         |                                                                        |
 | MPI_Keyval_create              | :x:                |         |                                                                        |
 | MPI_Keyval_free                | :x:                |         |                                                                        |
@@ -347,11 +347,11 @@ This is a list of the currently implemented MPI functions, and their usage with 
 | MPI_T_pvar_start               | :x:                |         |                                                                        |
 | MPI_T_pvar_stop                | :x:                |         |                                                                        |
 | MPI_T_pvar_write               | :x:                |         |                                                                        |
-| MPI_Test                       | :x:                |         |                                                                        |
+| MPI_Test                       | :heavy_check_mark: |         | `.test()` on the `mpi::request` object, or `mpi::test([REQUEST])`.     |
 | MPI_Test_cancelled             | :x:                |         |                                                                        |
-| MPI_Testall                    | :x:                |         |                                                                        |
-| MPI_Testany                    | :x:                |         |                                                                        |
-| MPI_Testsome                   | :x:                |         |                                                                        |
+| MPI_Testall                    | :heavy_check_mark: |         | `mpi::testall([REQUEST], ...)`, or `mpi::testall([REQUEST_VECTOR])`    |
+| MPI_Testany                    | :heavy_check_mark: |         | `mpi::testany([REQUEST], ...)`, or `mpi::testany([REQUEST_VECTOR])`    |
+| MPI_Testsome                   | :heavy_check_mark: |         | `mpi::testsome([REQUEST], ...)`, or `mpi::testsome([REQUEST_VECTOR])`  |
 | MPI_Topo_test                  | :x:                |         |                                                                        |
 | MPI_Type_commit                | :x:                |         |                                                                        |
 | MPI_Type_contiguous            | :x:                |         |                                                                        |
@@ -392,10 +392,10 @@ This is a list of the currently implemented MPI functions, and their usage with 
 | MPI_Unpack                     | :x:                |         |                                                                        |
 | MPI_Unpack_external            | :x:                |         |                                                                        |
 | MPI_Unpublish_name             | :x:                |         |                                                                        |
-| MPI_Wait                       | :x:                |         |                                                                        |
-| MPI_Waitall                    | :x:                |         |                                                                        |
-| MPI_Waitany                    | :x:                |         |                                                                        |
-| MPI_Waitsome                   | :x:                |         |                                                                        |
+| MPI_Wait                       | :heavy_check_mark: |         | `.wait()` on the `mpi::request` object, or `mpi::wait([REQUEST])`.     |
+| MPI_Waitall                    | :heavy_check_mark: |         | `mpi::waitall([REQUEST], ...)`, or `mpi::waitall([REQUEST_VECTOR])`    |
+| MPI_Waitany                    | :heavy_check_mark: |         | `mpi::waitany([REQUEST], ...)`, or `mpi::waitany([REQUEST_VECTOR])`    |
+| MPI_Waitsome                   | :heavy_check_mark: |         | `mpi::waitsome([REQUEST], ...)`, or `mpi::waitsome([REQUEST_VECTOR])`  |
 | MPI_Win_allocate               | :x:                |         |                                                                        |
 | MPI_Win_allocate_shared        | :x:                |         |                                                                        |
 | MPI_Win_attach                 | :x:                |         |                                                                        |
