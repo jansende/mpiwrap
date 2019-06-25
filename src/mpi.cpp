@@ -479,6 +479,12 @@ auto communicator::barrier() -> void
     paranoidly_assert((!finalized()));
     MPI_Barrier(_comm);
 }
+auto communicator::ibarrier() -> std::unique_ptr<ibarrier_request>
+{
+    paranoidly_assert((initialized()));
+    paranoidly_assert((!finalized()));
+    return std::make_unique<ibarrier_request>(_comm);
+}
 
 auto communicator::allreduce(const char _value, std::string &_bucket, MPI_Op _operation) -> void
 {
@@ -601,6 +607,10 @@ auto request::wait() -> void
 }
 #pragma endregion
 #pragma region request implementations
+ibarrier_request::ibarrier_request(MPI_Comm _comm) : request(_comm)
+{
+    MPI_Ibarrier(this->_comm, &this->_request);
+}
 irecv_request<std::string>::irecv_request(int _source, int _tag, MPI_Comm _comm, std::string &_value) : request(_comm), _source(_source), _tag(_tag), _bucket(_value)
 {
     irecv_impl(this->_source, this->_tag, this->_comm, &this->_status, &this->_request, this->_c_str);

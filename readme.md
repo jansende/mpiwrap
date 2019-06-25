@@ -68,7 +68,7 @@ This is a list of the currently implemented MPI functions, and their usage with 
 | MPI_Bsend_init                 | :x:                |         | Will not be implemented because raw memory management is required.     |
 | MPI_Buffer_attach              | :x:                |         | Will not be implemented because raw memory management is required.     |
 | MPI_Buffer_detach              | :x:                |         | Will not be implemented because raw memory management is required.     |
-| MPI_Cancel                     | :x:                |         |                                                                        |
+| MPI_Cancel                     | :heavy_check_mark: |         | `.cancel()` on the `mpi::request` object.                              |
 | MPI_Cart_coords                | :x:                |         |                                                                        |
 | MPI_Cart_create                | :x:                |         |                                                                        |
 | MPI_Cart_get                   | :x:                |         |                                                                        |
@@ -228,9 +228,9 @@ This is a list of the currently implemented MPI functions, and their usage with 
 | MPI_Ialltoall                  | :x:                |         |                                                                        |
 | MPI_Ialltoallv                 | :x:                |         |                                                                        |
 | MPI_Ialltoallw                 | :x:                |         |                                                                        |
-| MPI_Ibarrier                   | :x:                |         |                                                                        |
+| MPI_Ibarrier                   | :heavy_check_mark: |         | `mpi::comm([COMM])->ibarrier()`                                        |
 | MPI_Ibcast                     | :x:                |         |                                                                        |
-| MPI_Ibsend                     | :x:                |         |                                                                        |
+| MPI_Ibsend                     | :x:                |         | Will not be implemented because raw memory management is required.     |
 | MPI_Iexscan                    | :x:                |         |                                                                        |
 | MPI_Igather                    | :x:                |         |                                                                        |
 | MPI_Igatherv                   | :x:                |         |                                                                        |

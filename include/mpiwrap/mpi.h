@@ -133,6 +133,7 @@ class sender;
 class receiver;
 template <class T, class Op>
 class op_proxy;
+class ibarrier_request;
 
 class communicator
 {
@@ -201,6 +202,7 @@ public:
     auto alltoall(const std::string &_value, const size_t _chunk_size) -> std::string;
 
     auto barrier() -> void;
+    auto ibarrier() -> std::unique_ptr<ibarrier_request>;
 
     template <class T>
     auto allreduce(const T &_value, T &_bucket, MPI_Op _operation) -> void;
@@ -302,6 +304,11 @@ public:
 };
 #pragma endregion
 #pragma region request implementations
+class ibarrier_request : public request
+{
+public:
+    ibarrier_request(MPI_Comm _comm);
+};
 template <class T>
 class isend_request : public request
 {
