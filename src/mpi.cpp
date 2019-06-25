@@ -346,6 +346,34 @@ auto isend_impl(int _dest, int _tag, MPI_Comm _comm, MPI_Request *_request, cons
     isend_impl(_dest, _tag, _comm, _request, std::string{_value});
 }
 #pragma endregion
+#pragma region nonblocking synchronized send
+auto issend_impl(int _dest, int _tag, MPI_Comm _comm, MPI_Request *_request, const std::string &_value) -> void
+{
+    paranoidly_assert((initialized()));
+    paranoidly_assert((!finalized()));
+    MPI_Issend(_value.c_str(), _value.size(), MPI_CHAR, _dest, _tag, _comm, _request);
+}
+auto issend_impl(int _dest, int _tag, MPI_Comm _comm, MPI_Request *_request, const char *_value) -> void
+{
+    paranoidly_assert((initialized()));
+    paranoidly_assert((!finalized()));
+    issend_impl(_dest, _tag, _comm, _request, std::string{_value});
+}
+#pragma endregion
+#pragma region nonblocking ready mode send
+auto irsend_impl(int _dest, int _tag, MPI_Comm _comm, MPI_Request *_request, const std::string &_value) -> void
+{
+    paranoidly_assert((initialized()));
+    paranoidly_assert((!finalized()));
+    MPI_Irsend(_value.c_str(), _value.size(), MPI_CHAR, _dest, _tag, _comm, _request);
+}
+auto irsend_impl(int _dest, int _tag, MPI_Comm _comm, MPI_Request *_request, const char *_value) -> void
+{
+    paranoidly_assert((initialized()));
+    paranoidly_assert((!finalized()));
+    irsend_impl(_dest, _tag, _comm, _request, std::string{_value});
+}
+#pragma endregion
 
 #pragma region communicator
 communicator::communicator(MPI_Comm _comm) : _comm(_comm)
@@ -911,6 +939,30 @@ auto sender::isend(const char *_value) -> std::unique_ptr<isend_request<std::str
 auto sender::isend(const std::string &_value) -> std::unique_ptr<isend_request<std::string>>
 {
     return std::make_unique<isend_request<std::string>>(_dest, _tag, _comm, _value);
+}
+auto sender::issend(const char _value) -> std::unique_ptr<issend_request<std::string>>
+{
+    return issend(std::string{_value});
+}
+auto sender::issend(const char *_value) -> std::unique_ptr<issend_request<std::string>>
+{
+    return issend(std::string{_value});
+}
+auto sender::issend(const std::string &_value) -> std::unique_ptr<issend_request<std::string>>
+{
+    return std::make_unique<issend_request<std::string>>(_dest, _tag, _comm, _value);
+}
+auto sender::irsend(const char _value) -> std::unique_ptr<irsend_request<std::string>>
+{
+    return irsend(std::string{_value});
+}
+auto sender::irsend(const char *_value) -> std::unique_ptr<irsend_request<std::string>>
+{
+    return irsend(std::string{_value});
+}
+auto sender::irsend(const std::string &_value) -> std::unique_ptr<irsend_request<std::string>>
+{
+    return std::make_unique<irsend_request<std::string>>(_dest, _tag, _comm, _value);
 }
 
 auto sender::gather(const char _value, std::string &_bucket) -> void

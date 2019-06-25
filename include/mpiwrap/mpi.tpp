@@ -414,6 +414,46 @@ auto isend_impl(int _dest, int _tag, MPI_Comm _comm, MPI_Request *_request, cons
     MPI_Isend(_value.data(), _value.size(), type_wrapper<T>{}, _dest, _tag, _comm, _request);
 }
 #pragma endregion
+#pragma region nonblocking synchronized send
+//declarations
+auto issend_impl(int _dest, int _tag, MPI_Comm _comm, MPI_Request *_request, const std::string &_value) -> void;
+auto issend_impl(int _dest, int _tag, MPI_Comm _comm, MPI_Request *_request, const char *_value) -> void;
+//templates
+template <class T>
+auto issend_impl(int _dest, int _tag, MPI_Comm _comm, MPI_Request *_request, const T &_value) -> void
+{
+    paranoidly_assert((initialized()));
+    paranoidly_assert((!finalized()));
+    MPI_Issend(&_value, 1, type_wrapper<T>{}, _dest, _tag, _comm, _request);
+}
+template <class T>
+auto issend_impl(int _dest, int _tag, MPI_Comm _comm, MPI_Request *_request, const std::vector<T> &_value) -> void
+{
+    paranoidly_assert((initialized()));
+    paranoidly_assert((!finalized()));
+    MPI_Issend(_value.data(), _value.size(), type_wrapper<T>{}, _dest, _tag, _comm, _request);
+}
+#pragma endregion
+#pragma region nonblocking ready mode send
+//declarations
+auto irsend_impl(int _dest, int _tag, MPI_Comm _comm, MPI_Request *_request, const std::string &_value) -> void;
+auto irsend_impl(int _dest, int _tag, MPI_Comm _comm, MPI_Request *_request, const char *_value) -> void;
+//templates
+template <class T>
+auto irsend_impl(int _dest, int _tag, MPI_Comm _comm, MPI_Request *_request, const T &_value) -> void
+{
+    paranoidly_assert((initialized()));
+    paranoidly_assert((!finalized()));
+    MPI_Irsend(&_value, 1, type_wrapper<T>{}, _dest, _tag, _comm, _request);
+}
+template <class T>
+auto irsend_impl(int _dest, int _tag, MPI_Comm _comm, MPI_Request *_request, const std::vector<T> &_value) -> void
+{
+    paranoidly_assert((initialized()));
+    paranoidly_assert((!finalized()));
+    MPI_Irsend(_value.data(), _value.size(), type_wrapper<T>{}, _dest, _tag, _comm, _request);
+}
+#pragma endregion
 
 #pragma region communicator
 template <class T>
@@ -585,6 +625,16 @@ template <class T>
 isend_request<T>::isend_request(int _dest, int _tag, MPI_Comm _comm, const T &_value) : request(_comm), _dest(_dest), _tag(_tag), _value(_value)
 {
     isend_impl(this->_dest, this->_tag, this->_comm, &this->_request, this->_value);
+}
+template <class T>
+issend_request<T>::issend_request(int _dest, int _tag, MPI_Comm _comm, const T &_value) : request(_comm), _dest(_dest), _tag(_tag), _value(_value)
+{
+    issend_impl(this->_dest, this->_tag, this->_comm, &this->_request, this->_value);
+}
+template <class T>
+irsend_request<T>::irsend_request(int _dest, int _tag, MPI_Comm _comm, const T &_value) : request(_comm), _dest(_dest), _tag(_tag), _value(_value)
+{
+    irsend_impl(this->_dest, this->_tag, this->_comm, &this->_request, this->_value);
 }
 template <class T>
 irecv_request<T>::irecv_request(int _source, int _tag, MPI_Comm _comm, T &_value) : request(_comm), _source(_source), _tag(_tag)
@@ -782,6 +832,26 @@ template <class T>
 auto sender::isend(const std::vector<T> &_value) -> std::unique_ptr<isend_request<std::vector<T>>>
 {
     return std::make_unique<isend_request<std::vector<T>>>(_dest, _tag, _comm, _value);
+}
+template <class T>
+auto sender::issend(const T &_value) -> std::unique_ptr<issend_request<T>>
+{
+    return std::make_unique<issend_request<T>>(_dest, _tag, _comm, _value);
+}
+template <class T>
+auto sender::issend(const std::vector<T> &_value) -> std::unique_ptr<issend_request<std::vector<T>>>
+{
+    return std::make_unique<issend_request<std::vector<T>>>(_dest, _tag, _comm, _value);
+}
+template <class T>
+auto sender::irsend(const T &_value) -> std::unique_ptr<irsend_request<T>>
+{
+    return std::make_unique<irsend_request<T>>(_dest, _tag, _comm, _value);
+}
+template <class T>
+auto sender::irsend(const std::vector<T> &_value) -> std::unique_ptr<irsend_request<std::vector<T>>>
+{
+    return std::make_unique<irsend_request<std::vector<T>>>(_dest, _tag, _comm, _value);
 }
 
 template <class T>

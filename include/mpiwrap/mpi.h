@@ -314,6 +314,28 @@ public:
     isend_request(int _dest, int _tag, MPI_Comm _comm, const T &_value);
 };
 template <class T>
+class issend_request : public request
+{
+private:
+    int _dest;
+    int _tag;
+    T _value;
+
+public:
+    issend_request(int _dest, int _tag, MPI_Comm _comm, const T &_value);
+};
+template <class T>
+class irsend_request : public request
+{
+private:
+    int _dest;
+    int _tag;
+    T _value;
+
+public:
+    irsend_request(int _dest, int _tag, MPI_Comm _comm, const T &_value);
+};
+template <class T>
 class irecv_request : public request
 {
 private:
@@ -490,6 +512,20 @@ public:
     auto isend(const char _value) -> std::unique_ptr<isend_request<std::string>>;
     auto isend(const char *_value) -> std::unique_ptr<isend_request<std::string>>;
     auto isend(const std::string &_value) -> std::unique_ptr<isend_request<std::string>>;
+    template <class T>
+    auto issend(const T &_value) -> std::unique_ptr<issend_request<T>>;
+    template <class T>
+    auto issend(const std::vector<T> &_value) -> std::unique_ptr<issend_request<std::vector<T>>>;
+    auto issend(const char _value) -> std::unique_ptr<issend_request<std::string>>;
+    auto issend(const char *_value) -> std::unique_ptr<issend_request<std::string>>;
+    auto issend(const std::string &_value) -> std::unique_ptr<issend_request<std::string>>;
+    template <class T>
+    auto irsend(const T &_value) -> std::unique_ptr<irsend_request<T>>;
+    template <class T>
+    auto irsend(const std::vector<T> &_value) -> std::unique_ptr<irsend_request<std::vector<T>>>;
+    auto irsend(const char _value) -> std::unique_ptr<irsend_request<std::string>>;
+    auto irsend(const char *_value) -> std::unique_ptr<irsend_request<std::string>>;
+    auto irsend(const std::string &_value) -> std::unique_ptr<irsend_request<std::string>>;
 
     template <class T>
     auto gather(const T &_value, std::vector<T> &_bucket) -> void;
