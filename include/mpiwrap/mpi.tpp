@@ -9,7 +9,6 @@ namespace mpi
 #pragma region allgather
 //declarations
 auto allgather_impl(MPI_Comm _comm, const std::string &_value, std::string &_bucket) -> void;
-auto allgather_impl(MPI_Comm _comm, const char *_value, std::string &_bucket) -> void;
 //templates
 template <class T>
 auto allgather_impl(MPI_Comm _comm, const std::vector<T> &_value, std::vector<T> &_bucket) -> void
@@ -35,7 +34,6 @@ auto allgather_impl(MPI_Comm _comm, const std::vector<T> &_value, std::vector<T>
 #pragma region allreduce
 //declarations
 auto allreduce_impl(MPI_Comm _comm, const std::string &_value, std::string &_bucket, MPI_Op _operation) -> void;
-auto allreduce_impl(MPI_Comm _comm, const char *_value, std::string &_bucket, MPI_Op _operation) -> void;
 //templates
 template <class T>
 auto allreduce_impl(MPI_Comm _comm, const T &_value, T &_bucket, MPI_Op _operation) -> void
@@ -67,7 +65,6 @@ auto allreduce_impl(MPI_Comm _comm, const std::vector<T> &_value, std::vector<T>
 #pragma region alltoall
 //declarations
 auto alltoall_impl(MPI_Comm _comm, const std::string &_value, std::string &_bucket, const size_t _chunk_size) -> void;
-auto alltoall_impl(MPI_Comm _comm, const char *_value, std::string &_bucket, const size_t _chunk_size) -> void;
 //templates
 template <class T>
 auto alltoall_impl(MPI_Comm _comm, const std::vector<T> &_value, std::vector<T> &_bucket, const size_t _chunk_size) -> void
@@ -121,7 +118,6 @@ auto bcast_impl(int _source, MPI_Comm _comm, std::vector<T> &_value) -> void
 #pragma region gather
 //declarations
 auto gather_impl(int _dest, MPI_Comm _comm, const std::string &_value, std::string &_bucket) -> void;
-auto gather_impl(int _dest, MPI_Comm _comm, const char *_value, std::string &_bucket) -> void;
 //templates
 template <class T>
 auto gather_impl(int _dest, MPI_Comm _comm, const std::vector<T> &_value, std::vector<T> &_bucket) -> void
@@ -176,7 +172,6 @@ auto recv_impl(int _source, int _tag, MPI_Comm _comm, MPI_Status *_status, std::
 #pragma region reduce
 //declarations
 auto reduce_impl(int _dest, MPI_Comm _comm, const std::string &_value, std::string &_bucket, MPI_Op _operation) -> void;
-auto reduce_impl(int _dest, MPI_Comm _comm, const char *_value, std::string &_bucket, MPI_Op _operation) -> void;
 //templates
 template <class T>
 auto reduce_impl(int _dest, MPI_Comm _comm, const T &_value, T &_bucket, MPI_Op _operation) -> void
@@ -310,7 +305,6 @@ auto scatter_impl(int _source, MPI_Comm _comm, const std::vector<T> &_value, std
 #pragma region send
 //declarations
 auto send_impl(int _dest, int _tag, MPI_Comm _comm, const std::string &_value) -> void;
-auto send_impl(int _dest, int _tag, MPI_Comm _comm, const char *_value) -> void;
 //templates
 template <class T>
 auto send_impl(int _dest, int _tag, MPI_Comm _comm, const T &_value) -> void
@@ -330,7 +324,6 @@ auto send_impl(int _dest, int _tag, MPI_Comm _comm, const std::vector<T> &_value
 #pragma region synchronized send
 //declarations
 auto ssend_impl(int _dest, int _tag, MPI_Comm _comm, const std::string &_value) -> void;
-auto ssend_impl(int _dest, int _tag, MPI_Comm _comm, const char *_value) -> void;
 //templates
 template <class T>
 auto ssend_impl(int _dest, int _tag, MPI_Comm _comm, const T &_value) -> void
@@ -350,7 +343,6 @@ auto ssend_impl(int _dest, int _tag, MPI_Comm _comm, const std::vector<T> &_valu
 #pragma region ready mode send
 //declarations
 auto rsend_impl(int _dest, int _tag, MPI_Comm _comm, const std::string &_value) -> void;
-auto rsend_impl(int _dest, int _tag, MPI_Comm _comm, const char *_value) -> void;
 //templates
 template <class T>
 auto rsend_impl(int _dest, int _tag, MPI_Comm _comm, const T &_value) -> void
@@ -494,7 +486,6 @@ auto iscatter_impl(int _source, MPI_Comm _comm, MPI_Request *_request, const std
 #pragma region nonblocking send
 //declarations
 auto isend_impl(int _dest, int _tag, MPI_Comm _comm, MPI_Request *_request, const std::string &_value) -> void;
-auto isend_impl(int _dest, int _tag, MPI_Comm _comm, MPI_Request *_request, const char *_value) -> void;
 //templates
 template <class T>
 auto isend_impl(int _dest, int _tag, MPI_Comm _comm, MPI_Request *_request, const T &_value) -> void
@@ -514,7 +505,6 @@ auto isend_impl(int _dest, int _tag, MPI_Comm _comm, MPI_Request *_request, cons
 #pragma region nonblocking synchronized send
 //declarations
 auto issend_impl(int _dest, int _tag, MPI_Comm _comm, MPI_Request *_request, const std::string &_value) -> void;
-auto issend_impl(int _dest, int _tag, MPI_Comm _comm, MPI_Request *_request, const char *_value) -> void;
 //templates
 template <class T>
 auto issend_impl(int _dest, int _tag, MPI_Comm _comm, MPI_Request *_request, const T &_value) -> void
@@ -534,7 +524,6 @@ auto issend_impl(int _dest, int _tag, MPI_Comm _comm, MPI_Request *_request, con
 #pragma region nonblocking ready mode send
 //declarations
 auto irsend_impl(int _dest, int _tag, MPI_Comm _comm, MPI_Request *_request, const std::string &_value) -> void;
-auto irsend_impl(int _dest, int _tag, MPI_Comm _comm, MPI_Request *_request, const char *_value) -> void;
 //templates
 template <class T>
 auto irsend_impl(int _dest, int _tag, MPI_Comm _comm, MPI_Request *_request, const T &_value) -> void

@@ -86,10 +86,6 @@ auto allgather_impl(MPI_Comm _comm, const std::string &_value, std::string &_buc
     //we need to write the value back
     _bucket = std::string{_c_str.get()};
 }
-auto allgather_impl(MPI_Comm _comm, const char *_value, std::string &_bucket) -> void
-{
-    allgather_impl(_comm, std::string{_value}, _bucket);
-}
 #pragma endregion
 #pragma region allreduce
 auto allreduce_impl(MPI_Comm _comm, const std::string &_value, std::string &_bucket, MPI_Op _operation) -> void
@@ -109,10 +105,6 @@ auto allreduce_impl(MPI_Comm _comm, const std::string &_value, std::string &_buc
     MPI_Allreduce(_value.c_str(), _c_str.get(), _size, MPI_CHAR, _operation, _comm);
     //we need to write the value back
     _bucket = std::string{_c_str.get()};
-}
-auto allreduce_impl(MPI_Comm _comm, const char *_value, std::string &_bucket, MPI_Op _operation) -> void
-{
-    allreduce_impl(_comm, std::string{_value}, _bucket, _operation);
 }
 #pragma endregion
 #pragma region alltoall
@@ -135,10 +127,6 @@ auto alltoall_impl(MPI_Comm _comm, const std::string &_value, std::string &_buck
     MPI_Alltoall(_value.c_str(), _chunk_size, MPI_CHAR, _c_str.get(), _chunk_size, MPI_CHAR, _comm);
     //we need to write the value back
     _bucket = std::string{_c_str.get()};
-}
-auto alltoall_impl(MPI_Comm _comm, const char *_value, std::string &_bucket, const size_t _chunk_size) -> void
-{
-    alltoall_impl(_comm, std::string{_value}, _bucket, _chunk_size);
 }
 #pragma endregion
 #pragma region broadcast
@@ -184,10 +172,6 @@ auto gather_impl(int _dest, MPI_Comm _comm, const std::string &_value, std::stri
     if (_rank == _dest)
         _bucket = std::string{_c_str.get()};
 }
-auto gather_impl(int _dest, MPI_Comm _comm, const char *_value, std::string &_bucket) -> void
-{
-    gather_impl(_dest, _comm, std::string{_value}, _bucket);
-}
 #pragma endregion
 #pragma region receive
 auto recv_impl(int _source, int _tag, MPI_Comm _comm, MPI_Status *_status, std::string &_value) -> void
@@ -226,10 +210,6 @@ auto reduce_impl(int _dest, MPI_Comm _comm, const std::string &_value, std::stri
     if (_rank == _dest)
         _bucket = std::string{_c_str.get()};
 }
-auto reduce_impl(int _dest, MPI_Comm _comm, const char *_value, std::string &_bucket, MPI_Op _operation) -> void
-{
-    reduce_impl(_dest, _comm, std::string{_value}, _bucket, _operation);
-}
 #pragma endregion
 #pragma region local reduce
 auto reduce(const std::string &_value, std::string &_bucket, MPI_Op _operation) -> void
@@ -243,20 +223,12 @@ auto reduce(const std::string &_value, std::string &_bucket, MPI_Op _operation) 
     //we need to write the value back
     _bucket = std::string{_c_str.get()};
 }
-auto reduce(const char *_value, std::string &_bucket, MPI_Op _operation) -> void
-{
-    reduce(std::string{_value}, _bucket, _operation);
-}
 
 auto reduce(const std::string &_value, MPI_Op _operation) -> std::string
 {
     auto _bucket = std::string{};
     reduce(_value, _bucket, _operation);
     return _bucket;
-}
-auto reduce(const char *_value, MPI_Op _operation) -> std::string
-{
-    return reduce(std::string{_value}, _operation);
 }
 #pragma endregion
 #pragma region scatter
@@ -285,12 +257,6 @@ auto send_impl(int _dest, int _tag, MPI_Comm _comm, const std::string &_value) -
     paranoidly_assert((!finalized()));
     MPI_Send(_value.c_str(), _value.size(), MPI_CHAR, _dest, _tag, _comm);
 }
-auto send_impl(int _dest, int _tag, MPI_Comm _comm, const char *_value) -> void
-{
-    paranoidly_assert((initialized()));
-    paranoidly_assert((!finalized()));
-    send_impl(_dest, _tag, _comm, std::string{_value});
-}
 #pragma endregion
 #pragma region synchronized send
 auto ssend_impl(int _dest, int _tag, MPI_Comm _comm, const std::string &_value) -> void
@@ -299,10 +265,6 @@ auto ssend_impl(int _dest, int _tag, MPI_Comm _comm, const std::string &_value) 
     paranoidly_assert((!finalized()));
     MPI_Ssend(_value.c_str(), _value.size(), MPI_CHAR, _dest, _tag, _comm);
 }
-auto ssend_impl(int _dest, int _tag, MPI_Comm _comm, const char *_value) -> void
-{
-    ssend_impl(_dest, _tag, _comm, std::string{_value});
-}
 #pragma endregion
 #pragma region ready mode send
 auto rsend_impl(int _dest, int _tag, MPI_Comm _comm, const std::string &_value) -> void
@@ -310,10 +272,6 @@ auto rsend_impl(int _dest, int _tag, MPI_Comm _comm, const std::string &_value) 
     paranoidly_assert((initialized()));
     paranoidly_assert((!finalized()));
     MPI_Rsend(_value.c_str(), _value.size(), MPI_CHAR, _dest, _tag, _comm);
-}
-auto rsend_impl(int _dest, int _tag, MPI_Comm _comm, const char *_value) -> void
-{
-    rsend_impl(_dest, _tag, _comm, std::string{_value});
 }
 #pragma endregion
 
@@ -414,12 +372,6 @@ auto isend_impl(int _dest, int _tag, MPI_Comm _comm, MPI_Request *_request, cons
     paranoidly_assert((!finalized()));
     MPI_Isend(_value.c_str(), _value.size(), MPI_CHAR, _dest, _tag, _comm, _request);
 }
-auto isend_impl(int _dest, int _tag, MPI_Comm _comm, MPI_Request *_request, const char *_value) -> void
-{
-    paranoidly_assert((initialized()));
-    paranoidly_assert((!finalized()));
-    isend_impl(_dest, _tag, _comm, _request, std::string{_value});
-}
 #pragma endregion
 #pragma region nonblocking synchronized send
 auto issend_impl(int _dest, int _tag, MPI_Comm _comm, MPI_Request *_request, const std::string &_value) -> void
@@ -428,12 +380,6 @@ auto issend_impl(int _dest, int _tag, MPI_Comm _comm, MPI_Request *_request, con
     paranoidly_assert((!finalized()));
     MPI_Issend(_value.c_str(), _value.size(), MPI_CHAR, _dest, _tag, _comm, _request);
 }
-auto issend_impl(int _dest, int _tag, MPI_Comm _comm, MPI_Request *_request, const char *_value) -> void
-{
-    paranoidly_assert((initialized()));
-    paranoidly_assert((!finalized()));
-    issend_impl(_dest, _tag, _comm, _request, std::string{_value});
-}
 #pragma endregion
 #pragma region nonblocking ready mode send
 auto irsend_impl(int _dest, int _tag, MPI_Comm _comm, MPI_Request *_request, const std::string &_value) -> void
@@ -441,12 +387,6 @@ auto irsend_impl(int _dest, int _tag, MPI_Comm _comm, MPI_Request *_request, con
     paranoidly_assert((initialized()));
     paranoidly_assert((!finalized()));
     MPI_Irsend(_value.c_str(), _value.size(), MPI_CHAR, _dest, _tag, _comm, _request);
-}
-auto irsend_impl(int _dest, int _tag, MPI_Comm _comm, MPI_Request *_request, const char *_value) -> void
-{
-    paranoidly_assert((initialized()));
-    paranoidly_assert((!finalized()));
-    irsend_impl(_dest, _tag, _comm, _request, std::string{_value});
 }
 #pragma endregion
 
