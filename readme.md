@@ -229,7 +229,7 @@ This is a list of the currently implemented MPI functions, and their usage with 
 | MPI_Ialltoallv                 | :x:                |         |                                                                        |
 | MPI_Ialltoallw                 | :x:                |         |                                                                        |
 | MPI_Ibarrier                   | :heavy_check_mark: |         | `mpi::comm([COMM])->ibarrier()`                                        |
-| MPI_Ibcast                     | :x:                |         |                                                                        |
+| MPI_Ibcast                     | :heavy_check_mark: |         | `mpi::comm([COMM])->source([RANK])->ibcast[VALUE])`                    |
 | MPI_Ibsend                     | :x:                |         | Will not be implemented because raw memory management is required.     |
 | MPI_Iexscan                    | :x:                |         |                                                                        |
 | MPI_Igather                    | :x:                |         |                                                                        |

@@ -317,6 +317,23 @@ auto rsend_impl(int _dest, int _tag, MPI_Comm _comm, const char *_value) -> void
 }
 #pragma endregion
 
+#pragma region nonblocking broadcast
+auto ibcast_impl(int _source, MPI_Comm _comm, MPI_Request *_request, std::unique_ptr<char[]> &_value) -> void
+{
+    paranoidly_assert((initialized()));
+    paranoidly_assert((!finalized()));
+    //get current rank
+    auto _rank = comm(_comm)->rank();
+    //broadcast the size before the string
+    auto _size = (_rank == _source) ? static_cast<int>(std::strlen(_value.get()) + 1) : int{};
+    comm(_comm)->source(_source)->bcast(_size);
+    //we need to allocate some memory for it
+    if (_rank != _source)
+        _value = std::make_unique<char[]>(_size + 1);
+    //broadcast the data
+    MPI_Ibcast(_value.get(), _size, MPI_CHAR, _source, _comm, _request);
+}
+#pragma endregion
 #pragma region nonblocking receive
 auto irecv_impl(int _source, int _tag, MPI_Comm _comm, MPI_Status *_status, MPI_Request *_request, std::unique_ptr<char[]> &_value) -> void
 {
@@ -629,6 +646,38 @@ irecv_reply<std::string>::irecv_reply(int _source, int _tag, MPI_Comm _comm) : r
     irecv_impl(this->_source, this->_tag, this->_comm, &this->_status, &this->_request, this->_c_str);
 }
 auto irecv_reply<std::string>::get() -> std::string
+{
+    this->wait();
+    return std::string{this->_c_str.get()};
+}
+ibcast_request<std::string>::ibcast_request(int _source, MPI_Comm _comm, std::string &_value) : request(_comm), _source(_source), _bucket(_value),
+                                                                                                _c_str([](auto _value) {
+                                                                                                    auto temp = std::make_unique<char[]>(_value.size() + 1);
+                                                                                                    std::strcpy(temp.get(), _value.c_str());
+                                                                                                    return temp;
+                                                                                                }(_value))
+{
+    ibcast_impl(this->_source, this->_comm, &this->_request, this->_c_str);
+}
+auto ibcast_request<std::string>::wait() -> void
+{
+    if (!this->is_finished && !this->is_canceled)
+    {
+        MPI_Wait(&this->_request, &this->_status);
+        this->is_finished = true;
+    }
+    this->_bucket = std::string{this->_c_str.get()};
+}
+ibcast_reply<std::string>::ibcast_reply(int _source, MPI_Comm _comm, const std::string &_value) : request(_comm), _source(_source),
+                                                                                                  _c_str([](auto _value) {
+                                                                                                      auto temp = std::make_unique<char[]>(_value.size() + 1);
+                                                                                                      std::strcpy(temp.get(), _value.c_str());
+                                                                                                      return temp;
+                                                                                                  }(_value))
+{
+    ibcast_impl(this->_source, this->_comm, &this->_request, this->_c_str);
+}
+auto ibcast_reply<std::string>::get() -> std::string
 {
     this->wait();
     return std::string{this->_c_str.get()};

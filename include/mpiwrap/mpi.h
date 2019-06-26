@@ -390,6 +390,50 @@ public:
     irecv_reply(int _source, int _tag, MPI_Comm _comm);
     auto get() -> std::string;
 };
+
+template <class T>
+class ibcast_request : public request
+{
+private:
+    int _source;
+
+public:
+    ibcast_request(int _source, MPI_Comm _comm, T &_value);
+};
+template <>
+class ibcast_request<std::string> : public request
+{
+private:
+    int _source;
+    std::unique_ptr<char[]> _c_str;
+    std::string &_bucket;
+
+public:
+    ibcast_request(int _source, MPI_Comm _comm, std::string &_value);
+    virtual auto wait() -> void;
+};
+template <class T>
+class ibcast_reply : public request
+{
+private:
+    int _source;
+    T _bucket;
+
+public:
+    ibcast_reply(int _source, MPI_Comm _comm, const T &_value);
+    auto get() -> T;
+};
+template <>
+class ibcast_reply<std::string> : public request
+{
+private:
+    int _source;
+    std::unique_ptr<char[]> _c_str;
+
+public:
+    ibcast_reply(int _source, MPI_Comm _comm, const std::string &_value);
+    auto get() -> std::string;
+};
 #pragma endregion
 #pragma region test
 auto test(request *_value) -> bool;
@@ -465,6 +509,18 @@ public:
     auto bcast(const char *_value) -> std::enable_if_t<std::is_same<R, std::string>::value, std::string>;
     template <class R>
     auto bcast(const std::string &_value) -> std::enable_if_t<std::is_same<R, std::string>::value, std::string>;
+    template <class T>
+    auto ibcast(T &_value) -> std::unique_ptr<ibcast_request<T>>;
+    template <class R, class T>
+    auto ibcast(const T &_value) -> std::enable_if_t<std::is_same<R, T>::value, std::unique_ptr<ibcast_reply<T>>>;
+    template <class R, class T>
+    auto ibcast(const std::vector<T> &_value) -> std::enable_if_t<std::is_same<R, std::vector<T>>::value, std::unique_ptr<ibcast_reply<std::vector<T>>>>;
+    template <class R>
+    auto ibcast(const char _value) -> std::enable_if_t<std::is_same<R, std::string>::value, std::unique_ptr<ibcast_reply<std::string>>>;
+    template <class R>
+    auto ibcast(const char *_value) -> std::enable_if_t<std::is_same<R, std::string>::value, std::unique_ptr<ibcast_reply<std::string>>>;
+    template <class R>
+    auto ibcast(const std::string &_value) -> std::enable_if_t<std::is_same<R, std::string>::value, std::unique_ptr<ibcast_reply<std::string>>>;
 
     template <class T>
     auto scatter(const std::vector<T> &_value, std::vector<T> &_bucket, const size_t _chunk_size) -> void;

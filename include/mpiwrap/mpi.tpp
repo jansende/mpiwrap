@@ -368,6 +368,34 @@ auto rsend_impl(int _dest, int _tag, MPI_Comm _comm, const std::vector<T> &_valu
 }
 #pragma endregion
 
+#pragma region nonblocking broadcast
+//declarations
+auto ibcast_impl(int _source, MPI_Comm _comm, MPI_Request *_request, std::string &_value) -> void;
+//templates
+template <class T>
+auto ibcast_impl(int _source, MPI_Comm _comm, MPI_Request *_request, T &_value) -> void
+{
+    paranoidly_assert((initialized()));
+    paranoidly_assert((!finalized()));
+    MPI_Ibcast(&_value, 1, type_wrapper<T>{}, _source, _comm, _request);
+}
+template <class T>
+auto ibcast_impl(int _source, MPI_Comm _comm, MPI_Request *_request, std::vector<T> &_value) -> void
+{
+    paranoidly_assert((initialized()));
+    paranoidly_assert((!finalized()));
+    //get current rank
+    auto _rank = comm(_comm)->rank();
+    //broadcast the size before the data
+    auto _size = (_rank == _source) ? static_cast<int>(_value.size()) : int{};
+    comm(_comm)->source(_source)->bcast(_size);
+    //resize the vector if not the sender
+    if (_rank != _source)
+        _value.resize(_size);
+    //broadcast the data
+    MPI_Ibcast(_value.data(), _size, type_wrapper<T>{}, _source, _comm, _request);
+}
+#pragma endregion
 #pragma region nonblocking receive
 //declarations
 auto irecv_impl(int _source, int _tag, MPI_Comm _comm, MPI_Status *_status, MPI_Request *_request, std::unique_ptr<char[]> &_value) -> void;
@@ -634,12 +662,12 @@ issend_request<T>::issend_request(int _dest, int _tag, MPI_Comm _comm, const T &
 template <class T>
 irsend_request<T>::irsend_request(int _dest, int _tag, MPI_Comm _comm, const T &_value) : request(_comm), _dest(_dest), _tag(_tag), _value(_value)
 {
-    irsend_impl(this->_dest, this->_tag, this->_comm, &this->_request, this->_value);
+    irsend_impl(this->_dest, this->_tag, this->_comm, &this->_request, _value);
 }
 template <class T>
 irecv_request<T>::irecv_request(int _source, int _tag, MPI_Comm _comm, T &_value) : request(_comm), _source(_source), _tag(_tag)
 {
-    irecv_impl(this->_source, this->_tag, this->_comm, &this->_status, &this->_request, this->_bucket);
+    irecv_impl(this->_source, this->_tag, this->_comm, &this->_status, &this->_request, _value);
 }
 template <class T>
 irecv_reply<T>::irecv_reply(int _source, int _tag, MPI_Comm _comm) : request(_comm), _source(_source), _tag(_tag), _bucket(T{})
@@ -648,6 +676,22 @@ irecv_reply<T>::irecv_reply(int _source, int _tag, MPI_Comm _comm) : request(_co
 }
 template <class T>
 auto irecv_reply<T>::get() -> T
+{
+    this->wait();
+    return _bucket;
+}
+template <class T>
+ibcast_request<T>::ibcast_request(int _source, MPI_Comm _comm, T &_value) : request(_comm), _source(_source)
+{
+    ibcast_impl(this->_source, this->_comm, &this->_request, _value);
+}
+template <class T>
+ibcast_reply<T>::ibcast_reply(int _source, MPI_Comm _comm, const T &_value) : request(_comm), _source(_source), _bucket(_value)
+{
+    ibcast_impl(this->_source, this->_comm, &this->_request, this->_bucket);
+}
+template <class T>
+auto ibcast_reply<T>::get() -> T
 {
     this->wait();
     return _bucket;
@@ -776,6 +820,36 @@ auto receiver::bcast(const std::string &_value) -> std::enable_if_t<std::is_same
     auto _bucket = _value;
     bcast(_bucket);
     return _bucket;
+}
+template <class T>
+auto receiver::ibcast(T &_value) -> std::unique_ptr<ibcast_request<T>>
+{
+    return std::make_unique<ibcast_request<T>>(_source, _comm, _value);
+}
+template <class R, class T>
+auto receiver::ibcast(const T &_value) -> std::enable_if_t<std::is_same<R, T>::value, std::unique_ptr<ibcast_reply<T>>>
+{
+    return std::make_unique<ibcast_reply<T>>(_source, _comm, _value);
+}
+template <class R, class T>
+auto receiver::ibcast(const std::vector<T> &_value) -> std::enable_if_t<std::is_same<R, std::vector<T>>::value, std::unique_ptr<ibcast_reply<std::vector<T>>>>
+{
+    return std::make_unique<ibcast_reply<std::vector<T>>>(_source, _comm, _value);
+}
+template <class R>
+auto receiver::ibcast(const char _value) -> std::enable_if_t<std::is_same<R, std::string>::value, std::unique_ptr<ibcast_reply<std::string>>>
+{
+    return std::make_unique<ibcast_reply<std::string>>(_source, _comm, std::string{_value});
+}
+template <class R>
+auto receiver::ibcast(const char *_value) -> std::enable_if_t<std::is_same<R, std::string>::value, std::unique_ptr<ibcast_reply<std::string>>>
+{
+    return std::make_unique<ibcast_reply<std::string>>(_source, _comm, std::string{_value});
+}
+template <class R>
+auto receiver::ibcast(const std::string &_value) -> std::enable_if_t<std::is_same<R, std::string>::value, std::unique_ptr<ibcast_reply<std::string>>>
+{
+    return std::make_unique<ibcast_reply<std::string>>(_source, _comm, _value);
 }
 
 template <class T>
