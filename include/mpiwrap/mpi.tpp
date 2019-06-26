@@ -368,6 +368,31 @@ auto rsend_impl(int _dest, int _tag, MPI_Comm _comm, const std::vector<T> &_valu
 }
 #pragma endregion
 
+#pragma region nonblocking allgather
+//declarations
+auto iallgather_impl(MPI_Comm _comm, MPI_Request *_request, const std::string &_value, std::unique_ptr<char[]> &_bucket) -> void;
+//templates
+template <class T>
+auto iallgather_impl(MPI_Comm _comm, MPI_Request *_request, const std::vector<T> &_value, std::vector<T> &_bucket) -> void
+{
+    paranoidly_assert((initialized()));
+    paranoidly_assert((!finalized()));
+    //get current rank
+    auto _rank = comm(_comm)->rank();
+    //get world size
+    auto _size = comm(_comm)->size();
+    //broadcast the chunk_size before the data is gathered
+    auto _chunk_size = (_rank == 0) ? static_cast<int>(_value.size()) : int{};
+    comm(_comm)->source(0)->bcast(_chunk_size);
+    //check size
+    assert((_value.size() == _chunk_size));
+    //resize bucket to take all elements
+    if (_size * _chunk_size != _bucket.size())
+        _bucket.resize(_size * _chunk_size);
+    //gather the data
+    MPI_Iallgather(_value.data(), _chunk_size, type_wrapper<T>{}, _bucket.data(), _chunk_size, type_wrapper<T>{}, _comm, _request);
+}
+#pragma endregion
 #pragma region nonblocking broadcast
 //declarations
 auto ibcast_impl(int _source, MPI_Comm _comm, MPI_Request *_request, std::string &_value) -> void;
@@ -396,6 +421,34 @@ auto ibcast_impl(int _source, MPI_Comm _comm, MPI_Request *_request, std::vector
     MPI_Ibcast(_value.data(), _size, type_wrapper<T>{}, _source, _comm, _request);
 }
 #pragma endregion
+#pragma region nonblocking gather
+//declarations
+auto igather_impl(int _dest, MPI_Comm _comm, MPI_Request *_request, const std::string &_value, std::unique_ptr<char[]> &_bucket) -> void;
+//templates
+template <class T>
+auto igather_impl(int _dest, MPI_Comm _comm, MPI_Request *_request, const std::vector<T> &_value, std::vector<T> &_bucket) -> void
+{
+    paranoidly_assert((initialized()));
+    paranoidly_assert((!finalized()));
+    //get current rank
+    auto _rank = comm(_comm)->rank();
+    //get world size
+    auto _size = comm(_comm)->size();
+    //broadcast the chunk_size before the data is gathered
+    auto _chunk_size = (_rank == _dest) ? static_cast<int>(_value.size()) : int{};
+    comm(_comm)->source(_dest)->bcast(_chunk_size);
+    //check size
+    assert((_value.size() == _chunk_size));
+    //resize bucket to take all elements
+    if (_rank == _dest)
+    {
+        if (_size * _chunk_size != _bucket.size())
+            _bucket.resize(_size * _chunk_size);
+    }
+    //gather the data
+    MPI_Igather(_value.data(), _chunk_size, type_wrapper<T>{}, _bucket.data(), _chunk_size, type_wrapper<T>{}, _dest, _comm, _request);
+}
+#pragma endregion
 #pragma region nonblocking receive
 //declarations
 auto irecv_impl(int _source, int _tag, MPI_Comm _comm, MPI_Status *_status, MPI_Request *_request, std::unique_ptr<char[]> &_value) -> void;
@@ -420,6 +473,22 @@ auto irecv_impl(int _source, int _tag, MPI_Comm _comm, MPI_Status *_status, MPI_
     _value.resize(_size);
     //we need to receive it
     MPI_Irecv(_value.data(), _size, type_wrapper<T>{}, _source, _tag, _comm, _request);
+}
+#pragma endregion
+#pragma region nonblocking scatter
+//declarations
+auto iscatter_impl(int _source, MPI_Comm _comm, MPI_Request *_request, const std::string &_value, std::unique_ptr<char[]> &_bucket, const size_t _chunk_size) -> void;
+//templates
+template <class T>
+auto iscatter_impl(int _source, MPI_Comm _comm, MPI_Request *_request, const std::vector<T> &_value, std::vector<T> &_bucket, const size_t _chunk_size) -> void
+{
+    paranoidly_assert((initialized()));
+    paranoidly_assert((!finalized()));
+    //resize bucket to take all elements
+    if (_chunk_size != _bucket.size())
+        _bucket.resize(_chunk_size);
+    //scatter the data
+    MPI_Iscatter(_value.data(), _chunk_size, type_wrapper<T>{}, _bucket.data(), _chunk_size, type_wrapper<T>{}, _source, _comm, _request);
 }
 #pragma endregion
 #pragma region nonblocking send
@@ -505,6 +574,26 @@ auto communicator::allgather(const std::vector<T> &_value) -> std::vector<T>
     auto _bucket = std::vector<T>{};
     allgather(_value, _bucket);
     return _bucket;
+}
+template <class T>
+auto communicator::iallgather(const T &_value, std::vector<T> &_bucket) -> std::unique_ptr<iallgather_request<std::vector<T>>>
+{
+    return iallgather(std::vector<T>{_value}, _bucket);
+}
+template <class T>
+auto communicator::iallgather(const std::vector<T> &_value, std::vector<T> &_bucket) -> std::unique_ptr<iallgather_request<std::vector<T>>>
+{
+    return std::make_unique<iallgather_request<std::vector<T>>>(_comm, _value, _bucket);
+}
+template <class T>
+auto communicator::iallgather(const T &_value) -> std::unique_ptr<iallgather_reply<std::vector<T>>>
+{
+    return iallgather(std::vector<T>{_value});
+}
+template <class T>
+auto communicator::iallgather(const std::vector<T> &_value) -> std::unique_ptr<iallgather_reply<std::vector<T>>>
+{
+    return std::make_unique<iallgather_reply<std::vector<T>>>(_comm, _value);
 }
 
 template <class T>
@@ -696,6 +785,57 @@ auto ibcast_reply<T>::get() -> T
     this->wait();
     return _bucket;
 }
+
+template <class T>
+iscatter_request<T>::iscatter_request(int _source, MPI_Comm _comm, const T &_value, T &_bucket, const size_t _chunk_size) : request(_comm), _source(_source), _chunk_size(_chunk_size), _value(_value), _bucket(_bucket)
+{
+    iscatter_impl(this->_source, this->_comm, &this->_request, this->_value, this->_bucket, this->_chunk_size);
+}
+template <class T>
+iscatter_reply<T>::iscatter_reply(int _source, MPI_Comm _comm, const T &_value, const size_t _chunk_size) : request(_comm), _source(_source), _chunk_size(_chunk_size), _value(_value), _bucket(T{})
+{
+    iscatter_impl(this->_source, this->_comm, &this->_request, this->_value, this->_bucket, this->_chunk_size);
+}
+template <class T>
+auto iscatter_reply<T>::get() -> T
+{
+    this->wait();
+    return _bucket;
+}
+
+template <class T>
+igather_request<T>::igather_request(int _dest, MPI_Comm _comm, const T &_value, T &_bucket) : request(_comm), _dest(_dest), _value(_value), _bucket(_bucket)
+{
+    igather_impl(this->_dest, this->_comm, &this->_request, this->_value, this->_bucket);
+}
+template <class T>
+igather_reply<T>::igather_reply(int _dest, MPI_Comm _comm, const T &_value) : request(_comm), _dest(_dest), _value(_value), _bucket(T{})
+{
+    igather_impl(this->_dest, this->_comm, &this->_request, this->_value, this->_bucket);
+}
+template <class T>
+auto igather_reply<T>::get() -> T
+{
+    this->wait();
+    return _bucket;
+}
+
+template <class T>
+iallgather_request<T>::iallgather_request(MPI_Comm _comm, const T &_value, T &_bucket) : request(_comm), _value(_value), _bucket(_bucket)
+{
+    iallgather_impl(this->_comm, &this->_request, this->_value, this->_bucket);
+}
+template <class T>
+iallgather_reply<T>::iallgather_reply(MPI_Comm _comm, const T &_value) : request(_comm), _value(_value), _bucket(T{})
+{
+    iallgather_impl(this->_comm, &this->_request, this->_value, this->_bucket);
+}
+template <class T>
+auto iallgather_reply<T>::get() -> T
+{
+    this->wait();
+    return _bucket;
+}
 #pragma endregion
 #pragma region test
 template <class... T>
@@ -864,6 +1004,16 @@ auto receiver::scatter(const std::vector<T> &_value, const size_t _chunk_size) -
     scatter(_value, _bucket, _chunk_size);
     return _bucket;
 }
+template <class T>
+auto receiver::iscatter(const std::vector<T> &_value, std::vector<T> &_bucket, const size_t _chunk_size) -> std::unique_ptr<iscatter_request<std::vector<T>>>
+{
+    return std::make_unique<iscatter_request<std::vector<T>>>(_source, _comm, _value, _bucket, _chunk_size);
+}
+template <class T>
+auto receiver::iscatter(const std::vector<T> &_value, const size_t _chunk_size) -> std::unique_ptr<iscatter_reply<std::vector<T>>>
+{
+    return std::make_unique<iscatter_reply<std::vector<T>>>(_source, _comm, _value, _chunk_size);
+}
 #pragma endregion
 #pragma region sender
 template <class T>
@@ -949,6 +1099,26 @@ auto sender::gather(const std::vector<T> &_value) -> std::vector<T>
     auto _bucket = std::vector<T>{};
     gather(_value, _bucket);
     return _bucket;
+}
+template <class T>
+auto sender::igather(const T &_value, std::vector<T> &_bucket) -> std::unique_ptr<igather_request<std::vector<T>>>
+{
+    return igather(std::vector<T>{_value}, _bucket);
+}
+template <class T>
+auto sender::igather(const std::vector<T> &_value, std::vector<T> &_bucket) -> std::unique_ptr<igather_request<std::vector<T>>>
+{
+    return std::make_unique<igather_request<std::vector<T>>>(_dest, _comm, _value, _bucket);
+}
+template <class T>
+auto sender::igather(const T &_value) -> std::unique_ptr<igather_reply<std::vector<T>>>
+{
+    return igather(std::vector<T>{_value});
+}
+template <class T>
+auto sender::igather(const std::vector<T> &_value) -> std::unique_ptr<igather_reply<std::vector<T>>>
+{
+    return std::make_unique<igather_reply<std::vector<T>>>(_dest, _comm, _value);
 }
 
 template <class T>

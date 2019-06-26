@@ -222,7 +222,7 @@ This is a list of the currently implemented MPI functions, and their usage with 
 | MPI_Group_size                 | :x:                |         |                                                                        |
 | MPI_Group_translate_ranks      | :x:                |         |                                                                        |
 | MPI_Group_union                | :x:                |         |                                                                        |
-| MPI_Iallgather                 | :x:                |         |                                                                        |
+| MPI_Iallgather                 | :heavy_check_mark: |         | `mpi::comm([COMM])->iallgather([VALUE], [BUCKET])`                     |
 | MPI_Iallgatherv                | :x:                |         |                                                                        |
 | MPI_Iallreduce                 | :x:                |         |                                                                        |
 | MPI_Ialltoall                  | :x:                |         |                                                                        |
@@ -232,7 +232,7 @@ This is a list of the currently implemented MPI functions, and their usage with 
 | MPI_Ibcast                     | :heavy_check_mark: |         | `mpi::comm([COMM])->source([RANK])->ibcast[VALUE])`                    |
 | MPI_Ibsend                     | :x:                |         | Will not be implemented because raw memory management is required.     |
 | MPI_Iexscan                    | :x:                |         |                                                                        |
-| MPI_Igather                    | :x:                |         |                                                                        |
+| MPI_Igather                    | :heavy_check_mark: |         | `mpi::comm([COMM])->dest([RANK])->igather([VALUE], [BUCKET])`          |
 | MPI_Igatherv                   | :x:                |         |                                                                        |
 | MPI_Improbe                    | :x:                |         |                                                                        |
 | MPI_Imrecv                     | :x:                |         |                                                                        |
@@ -263,7 +263,7 @@ This is a list of the currently implemented MPI functions, and their usage with 
 | MPI_Irsend                     | :heavy_check_mark: |         | `mpi::comm([COMM])->dest([RANK])->irsend([VALUE])`                     |
 | MPI_Is_thread_main             | :x:                |         |                                                                        |
 | MPI_Iscan                      | :x:                |         |                                                                        |
-| MPI_Iscatter                   | :x:                |         |                                                                        |
+| MPI_Iscatter                   | :heavy_check_mark: |         | `mpi::comm([COMM])->source([RANK])->iscatter([VALUE], [CHUNKSIZE])`    |
 | MPI_Iscatterv                  | :x:                |         |                                                                        |
 | MPI_Isend                      | :heavy_check_mark: |         | `mpi::comm([COMM])->dest([RANK])->isend([VALUE])`                      |
 | MPI_Issend                     | :heavy_check_mark: |         | `mpi::comm([COMM])->dest([RANK])->issend([VALUE])`                     |

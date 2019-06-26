@@ -134,6 +134,10 @@ class receiver;
 template <class T, class Op>
 class op_proxy;
 class ibarrier_request;
+template <class T>
+class iallgather_request;
+template <class T>
+class iallgather_reply;
 
 class communicator
 {
@@ -185,6 +189,20 @@ public:
     auto allgather(const char _value) -> std::string;
     auto allgather(const char *_value) -> std::string;
     auto allgather(const std::string &_value) -> std::string;
+    template <class T>
+    auto iallgather(const T &_value, std::vector<T> &_bucket) -> std::unique_ptr<iallgather_request<std::vector<T>>>;
+    template <class T>
+    auto iallgather(const std::vector<T> &_value, std::vector<T> &_bucket) -> std::unique_ptr<iallgather_request<std::vector<T>>>;
+    auto iallgather(const char _value, std::string &_bucket) -> std::unique_ptr<iallgather_request<std::string>>;
+    auto iallgather(const char *_value, std::string &_bucket) -> std::unique_ptr<iallgather_request<std::string>>;
+    auto iallgather(const std::string &_value, std::string &_bucket) -> std::unique_ptr<iallgather_request<std::string>>;
+    template <class T>
+    auto iallgather(const T &_value) -> std::unique_ptr<iallgather_reply<std::vector<T>>>;
+    template <class T>
+    auto iallgather(const std::vector<T> &_value) -> std::unique_ptr<iallgather_reply<std::vector<T>>>;
+    auto iallgather(const char _value) -> std::unique_ptr<iallgather_reply<std::string>>;
+    auto iallgather(const char *_value) -> std::unique_ptr<iallgather_reply<std::string>>;
+    auto iallgather(const std::string &_value) -> std::unique_ptr<iallgather_reply<std::string>>;
 
     template <class T>
     auto alltoall(const T &_value, std::vector<T> &_bucket, const size_t _chunk_size) -> void;
@@ -434,6 +452,153 @@ public:
     ibcast_reply(int _source, MPI_Comm _comm, const std::string &_value);
     auto get() -> std::string;
 };
+
+template <class T>
+class iscatter_request : public request
+{
+private:
+    int _source;
+    size_t _chunk_size;
+    T _value;
+    T& _bucket;
+
+public:
+    iscatter_request(int _source, MPI_Comm _comm, const T &_value, T& _bucket, const size_t _chunk_size);
+};
+template <>
+class iscatter_request<std::string> : public request
+{
+private:
+    int _source;
+    size_t _chunk_size;
+    std::string _value;
+    std::unique_ptr<char[]> _c_str;
+    std::string &_bucket;
+
+public:
+    iscatter_request(int _source, MPI_Comm _comm, const std::string &_value, std::string & _bucket, const size_t _chunk_size);
+    virtual auto wait() -> void;
+};
+template <class T>
+class iscatter_reply : public request
+{
+private:
+    int _source;
+    size_t _chunk_size;
+    T _value;
+    T _bucket;
+
+public:
+    iscatter_reply(int _source, MPI_Comm _comm, const T &_value, const size_t _chunk_size);
+    auto get() -> T;
+};
+template <>
+class iscatter_reply<std::string> : public request
+{
+private:
+    int _source;
+    size_t _chunk_size;
+    std::string _value;
+    std::unique_ptr<char[]> _c_str;
+
+public:
+    iscatter_reply(int _source, MPI_Comm _comm, const std::string &_value, const size_t _chunk_size);
+    auto get() -> std::string;
+};
+
+template <class T>
+class igather_request : public request
+{
+private:
+    int _dest;
+    T _value;
+    T& _bucket;
+
+public:
+    igather_request(int _dest, MPI_Comm _comm, const T &_value, T& _bucket);
+};
+template <>
+class igather_request<std::string> : public request
+{
+private:
+    int _dest;
+    std::string _value;
+    std::unique_ptr<char[]> _c_str;
+    std::string &_bucket;
+
+public:
+    igather_request(int _dest, MPI_Comm _comm, const std::string &_value, std::string & _bucket);
+    virtual auto wait() -> void;
+};
+template <class T>
+class igather_reply : public request
+{
+private:
+    int _dest;
+    T _value;
+    T _bucket;
+
+public:
+    igather_reply(int _dest, MPI_Comm _comm, const T &_value);
+    auto get() -> T;
+};
+template <>
+class igather_reply<std::string> : public request
+{
+private:
+    int _dest;
+    std::string _value;
+    std::unique_ptr<char[]> _c_str;
+
+public:
+    igather_reply(int _dest, MPI_Comm _comm, const std::string &_value);
+    auto get() -> std::string;
+};
+
+template <class T>
+class iallgather_request : public request
+{
+private:
+    T _value;
+    T& _bucket;
+
+public:
+    iallgather_request(MPI_Comm _comm, const T &_value, T& _bucket);
+};
+template <>
+class iallgather_request<std::string> : public request
+{
+private:
+    std::string _value;
+    std::unique_ptr<char[]> _c_str;
+    std::string &_bucket;
+
+public:
+    iallgather_request(MPI_Comm _comm, const std::string &_value, std::string & _bucket);
+    virtual auto wait() -> void;
+};
+template <class T>
+class iallgather_reply : public request
+{
+private:
+    T _value;
+    T _bucket;
+
+public:
+    iallgather_reply(MPI_Comm _comm, const T &_value);
+    auto get() -> T;
+};
+template <>
+class iallgather_reply<std::string> : public request
+{
+private:
+    std::string _value;
+    std::unique_ptr<char[]> _c_str;
+
+public:
+    iallgather_reply(MPI_Comm _comm, const std::string &_value);
+    auto get() -> std::string;
+};
 #pragma endregion
 #pragma region test
 auto test(request *_value) -> bool;
@@ -530,6 +695,14 @@ public:
     auto scatter(const std::vector<T> &_value, const size_t _chunk_size) -> std::vector<T>;
     auto scatter(const char *_value, const size_t _chunk_size) -> std::string;
     auto scatter(const std::string &_value, const size_t _chunk_size) -> std::string;
+    template <class T>
+    auto iscatter(const std::vector<T> &_value, std::vector<T> &_bucket, const size_t _chunk_size) -> std::unique_ptr<iscatter_request<std::vector<T>>>;
+    auto iscatter(const char *_value, std::string &_bucket, const size_t _chunk_size) -> std::unique_ptr<iscatter_request<std::string>>;
+    auto iscatter(const std::string &_value, std::string &_bucket, const size_t _chunk_size) -> std::unique_ptr<iscatter_request<std::string>>;
+    template <class T>
+    auto iscatter(const std::vector<T> &_value, const size_t _chunk_size) -> std::unique_ptr<iscatter_reply<std::vector<T>>>;
+    auto iscatter(const char *_value, const size_t _chunk_size) -> std::unique_ptr<iscatter_reply<std::string>>;
+    auto iscatter(const std::string &_value, const size_t _chunk_size) -> std::unique_ptr<iscatter_reply<std::string>>;
 };
 #pragma endregion
 #pragma region sender
@@ -604,6 +777,20 @@ public:
     auto gather(const char _value) -> std::string;
     auto gather(const char *_value) -> std::string;
     auto gather(const std::string &_value) -> std::string;
+    template <class T>
+    auto igather(const T &_value, std::vector<T> &_bucket) -> std::unique_ptr<igather_request<std::vector<T>>>;
+    template <class T>
+    auto igather(const std::vector<T> &_value, std::vector<T> &_bucket) -> std::unique_ptr<igather_request<std::vector<T>>>;
+    auto igather(const char _value, std::string &_bucket) -> std::unique_ptr<igather_request<std::string>>;
+    auto igather(const char *_value, std::string &_bucket) -> std::unique_ptr<igather_request<std::string>>;
+    auto igather(const std::string &_value, std::string &_bucket) -> std::unique_ptr<igather_request<std::string>>;
+    template <class T>
+    auto igather(const T &_value) -> std::unique_ptr<igather_reply<std::vector<T>>>;
+    template <class T>
+    auto igather(const std::vector<T> &_value) -> std::unique_ptr<igather_reply<std::vector<T>>>;
+    auto igather(const char _value) -> std::unique_ptr<igather_reply<std::string>>;
+    auto igather(const char *_value) -> std::unique_ptr<igather_reply<std::string>>;
+    auto igather(const std::string &_value) -> std::unique_ptr<igather_reply<std::string>>;
 
     template <class T>
     auto reduce(const T &_value, T &_bucket, MPI_Op _operation) -> void;

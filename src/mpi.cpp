@@ -317,6 +317,26 @@ auto rsend_impl(int _dest, int _tag, MPI_Comm _comm, const char *_value) -> void
 }
 #pragma endregion
 
+#pragma region nonblocking allgather
+auto iallgather_impl(MPI_Comm _comm, MPI_Request *_request, const std::string &_value, std::unique_ptr<char[]> &_bucket) -> void
+{
+    paranoidly_assert((initialized()));
+    paranoidly_assert((!finalized()));
+    //get current rank
+    auto _rank = comm(_comm)->rank();
+    //get world size
+    auto _size = comm(_comm)->size();
+    //broadcast the chunk_size before the data is gathered
+    auto _chunk_size = (_rank == 0) ? static_cast<int>(_value.size()) : int{};
+    comm(_comm)->source(0)->bcast(_chunk_size);
+    //check size
+    assert((_value.size() == _chunk_size));
+    //we need to allocate some memory for the result
+    _bucket = std::make_unique<char[]>(_size * _chunk_size + 1);
+    //gather the data
+    MPI_Iallgather(_value.c_str(), _chunk_size, MPI_CHAR, _bucket.get(), _chunk_size, MPI_CHAR, _comm, _request);
+}
+#pragma endregion
 #pragma region nonblocking broadcast
 auto ibcast_impl(int _source, MPI_Comm _comm, MPI_Request *_request, std::unique_ptr<char[]> &_value) -> void
 {
@@ -334,6 +354,26 @@ auto ibcast_impl(int _source, MPI_Comm _comm, MPI_Request *_request, std::unique
     MPI_Ibcast(_value.get(), _size, MPI_CHAR, _source, _comm, _request);
 }
 #pragma endregion
+#pragma region nonblocking gather
+auto igather_impl(int _dest, MPI_Comm _comm, MPI_Request *_request, const std::string &_value, std::unique_ptr<char[]> &_bucket) -> void
+{
+    paranoidly_assert((initialized()));
+    paranoidly_assert((!finalized()));
+    //get current rank
+    auto _rank = comm(_comm)->rank();
+    //get world size
+    auto _size = comm(_comm)->size();
+    //broadcast the chunk_size before the string is gathered
+    auto _chunk_size = (_rank == _dest) ? static_cast<int>(_value.size()) : int{};
+    comm(_comm)->source(_dest)->bcast(_chunk_size);
+    //check size
+    assert((_value.size() == _chunk_size));
+    //we need to allocate some memory for the result
+    _bucket = std::make_unique<char[]>((_rank == _dest) ? _size * _chunk_size + 1 : 1);
+    //gather the data
+    MPI_Igather(_value.c_str(), _chunk_size, MPI_CHAR, _bucket.get(), _chunk_size, MPI_CHAR, _dest, _comm, _request);
+}
+#pragma endregion
 #pragma region nonblocking receive
 auto irecv_impl(int _source, int _tag, MPI_Comm _comm, MPI_Status *_status, MPI_Request *_request, std::unique_ptr<char[]> &_value) -> void
 {
@@ -347,6 +387,24 @@ auto irecv_impl(int _source, int _tag, MPI_Comm _comm, MPI_Status *_status, MPI_
     _value = std::make_unique<char[]>(_size + 1);
     //we need to receive it
     MPI_Irecv(_value.get(), _size, MPI_CHAR, _source, _tag, _comm, _request);
+}
+#pragma endregion
+#pragma region nonblocking scatter
+auto iscatter_impl(int _source, MPI_Comm _comm, MPI_Request *_request, const std::string &_value, std::unique_ptr<char[]> &_bucket, const size_t _chunk_size) -> void
+{
+    paranoidly_assert((initialized()));
+    paranoidly_assert((!finalized()));
+    //get current rank
+    auto _rank = comm(_comm)->rank();
+    //we need a copy of the original data
+
+    auto _c_str = std::make_unique<char[]>(0);
+    if (_rank == _source)
+        std::strcpy(_c_str.get(), _value.c_str());
+    //create result container
+    _bucket = std::make_unique<char[]>(_chunk_size + 1);
+    //scatter the data
+    MPI_Iscatter(_c_str.get(), _chunk_size, MPI_CHAR, _bucket.get(), _chunk_size, MPI_CHAR, _source, _comm, _request);
 }
 #pragma endregion
 #pragma region nonblocking send
@@ -461,6 +519,30 @@ auto communicator::allgather(const std::string &_value) -> std::string
     auto _bucket = std::string{};
     allgather(_value, _bucket);
     return _bucket;
+}
+auto communicator::iallgather(const char _value, std::string &_bucket) -> std::unique_ptr<iallgather_request<std::string>>
+{
+    return iallgather(std::string{_value}, _bucket);
+}
+auto communicator::iallgather(const char *_value, std::string &_bucket) -> std::unique_ptr<iallgather_request<std::string>>
+{
+    return iallgather(std::string{_value}, _bucket);
+}
+auto communicator::iallgather(const std::string &_value, std::string &_bucket) -> std::unique_ptr<iallgather_request<std::string>>
+{
+    return std::make_unique<iallgather_request<std::string>>(_comm, _value, _bucket);
+}
+auto communicator::iallgather(const char _value) -> std::unique_ptr<iallgather_reply<std::string>>
+{
+    return iallgather(std::string{_value});
+}
+auto communicator::iallgather(const char *_value) -> std::unique_ptr<iallgather_reply<std::string>>
+{
+    return iallgather(std::string{_value});
+}
+auto communicator::iallgather(const std::string &_value) -> std::unique_ptr<iallgather_reply<std::string>>
+{
+    return std::make_unique<iallgather_reply<std::string>>(_comm, _value);
 }
 
 auto communicator::alltoall(const char _value, std::string &_bucket, const size_t _chunk_size) -> void
@@ -678,6 +760,75 @@ ibcast_reply<std::string>::ibcast_reply(int _source, MPI_Comm _comm, const std::
     ibcast_impl(this->_source, this->_comm, &this->_request, this->_c_str);
 }
 auto ibcast_reply<std::string>::get() -> std::string
+{
+    this->wait();
+    return std::string{this->_c_str.get()};
+}
+
+iscatter_request<std::string>::iscatter_request(int _source, MPI_Comm _comm, const std::string &_value, std::string &_bucket, const size_t _chunk_size) : request(_comm), _source(_source), _chunk_size(_chunk_size), _value(_value), _bucket(_bucket)
+{
+    iscatter_impl(this->_source, this->_comm, &this->_request, this->_value, this->_c_str, this->_chunk_size);
+}
+auto iscatter_request<std::string>::wait() -> void
+{
+    if (!this->is_finished && !this->is_canceled)
+    {
+        MPI_Wait(&this->_request, &this->_status);
+        this->is_finished = true;
+    }
+    this->_bucket = std::string{this->_c_str.get()};
+}
+iscatter_reply<std::string>::iscatter_reply(int _source, MPI_Comm _comm, const std::string &_value, const size_t _chunk_size) : request(_comm), _source(_source), _chunk_size(_chunk_size), _value(_value)
+{
+    iscatter_impl(this->_source, this->_comm, &this->_request, this->_value, this->_c_str, this->_chunk_size);
+}
+auto iscatter_reply<std::string>::get() -> std::string
+{
+    this->wait();
+    return std::string{this->_c_str.get()};
+}
+
+igather_request<std::string>::igather_request(int _dest, MPI_Comm _comm, const std::string &_value, std::string &_bucket) : request(_comm), _dest(_dest), _value(_value), _bucket(_bucket)
+{
+    igather_impl(this->_dest, this->_comm, &this->_request, this->_value, this->_c_str);
+}
+auto igather_request<std::string>::wait() -> void
+{
+    if (!this->is_finished && !this->is_canceled)
+    {
+        MPI_Wait(&this->_request, &this->_status);
+        this->is_finished = true;
+    }
+    this->_bucket = std::string{this->_c_str.get()};
+}
+igather_reply<std::string>::igather_reply(int _dest, MPI_Comm _comm, const std::string &_value) : request(_comm), _dest(_dest), _value(_value)
+{
+    igather_impl(this->_dest, this->_comm, &this->_request, this->_value, this->_c_str);
+}
+auto igather_reply<std::string>::get() -> std::string
+{
+    this->wait();
+    return std::string{this->_c_str.get()};
+}
+
+iallgather_request<std::string>::iallgather_request(MPI_Comm _comm, const std::string &_value, std::string &_bucket) : request(_comm), _value(_value), _bucket(_bucket)
+{
+    iallgather_impl(this->_comm, &this->_request, this->_value, this->_c_str);
+}
+auto iallgather_request<std::string>::wait() -> void
+{
+    if (!this->is_finished && !this->is_canceled)
+    {
+        MPI_Wait(&this->_request, &this->_status);
+        this->is_finished = true;
+    }
+    this->_bucket = std::string{this->_c_str.get()};
+}
+iallgather_reply<std::string>::iallgather_reply(MPI_Comm _comm, const std::string &_value) : request(_comm), _value(_value)
+{
+    iallgather_impl(this->_comm, &this->_request, this->_value, this->_c_str);
+}
+auto iallgather_reply<std::string>::get() -> std::string
 {
     this->wait();
     return std::string{this->_c_str.get()};
@@ -935,6 +1086,22 @@ auto receiver::scatter(const std::string &_value, const size_t _chunk_size) -> s
     scatter(_value, _bucket, _chunk_size);
     return _bucket;
 }
+auto receiver::iscatter(const char *_value, std::string &_bucket, const size_t _chunk_size) -> std::unique_ptr<iscatter_request<std::string>>
+{
+    return std::make_unique<iscatter_request<std::string>>(_source, _comm, std::string{_value}, _bucket, _chunk_size);
+}
+auto receiver::iscatter(const std::string &_value, std::string &_bucket, const size_t _chunk_size) -> std::unique_ptr<iscatter_request<std::string>>
+{
+    return std::make_unique<iscatter_request<std::string>>(_source, _comm, _value, _bucket, _chunk_size);
+}
+auto receiver::iscatter(const char *_value, const size_t _chunk_size) -> std::unique_ptr<iscatter_reply<std::string>>
+{
+    return std::make_unique<iscatter_reply<std::string>>(_source, _comm, std::string{_value}, _chunk_size);
+}
+auto receiver::iscatter(const std::string &_value, const size_t _chunk_size) -> std::unique_ptr<iscatter_reply<std::string>>
+{
+    return std::make_unique<iscatter_reply<std::string>>(_source, _comm, _value, _chunk_size);
+}
 #pragma endregion
 #pragma region sender
 sender::sender(int _dest, int _tag, MPI_Comm _comm) : _dest(_dest), _tag(_tag), _comm(_comm)
@@ -1049,6 +1216,30 @@ auto sender::gather(const std::string &_value) -> std::string
     auto _bucket = std::string{};
     gather(_value, _bucket);
     return _bucket;
+}
+auto sender::igather(const char _value, std::string &_bucket) -> std::unique_ptr<igather_request<std::string>>
+{
+    return igather(std::string{_value}, _bucket);
+}
+auto sender::igather(const char *_value, std::string &_bucket) -> std::unique_ptr<igather_request<std::string>>
+{
+    return igather(std::string{_value}, _bucket);
+}
+auto sender::igather(const std::string &_value, std::string &_bucket) -> std::unique_ptr<igather_request<std::string>>
+{
+    return std::make_unique<igather_request<std::string>>(_dest, _comm, _value, _bucket);
+}
+auto sender::igather(const char _value) -> std::unique_ptr<igather_reply<std::string>>
+{
+    return igather(std::string{_value});
+}
+auto sender::igather(const char *_value) -> std::unique_ptr<igather_reply<std::string>>
+{
+    return igather(std::string{_value});
+}
+auto sender::igather(const std::string &_value) -> std::unique_ptr<igather_reply<std::string>>
+{
+    return std::make_unique<igather_reply<std::string>>(_dest, _comm, _value);
 }
 
 auto sender::reduce(const char _value, std::string &_bucket, MPI_Op _operation) -> void
