@@ -138,6 +138,10 @@ template <class T>
 class iallgather_request;
 template <class T>
 class iallgather_reply;
+template <class T>
+class ialltoall_request;
+template <class T>
+class ialltoall_reply;
 
 class communicator
 {
@@ -218,6 +222,20 @@ public:
     auto alltoall(const char _value, const size_t _chunk_size) -> std::string;
     auto alltoall(const char *_value, const size_t _chunk_size) -> std::string;
     auto alltoall(const std::string &_value, const size_t _chunk_size) -> std::string;
+    template <class T>
+    auto ialltoall(const T &_value, std::vector<T> &_bucket, const size_t _chunk_size) -> std::unique_ptr<ialltoall_request<std::vector<T>>>;
+    template <class T>
+    auto ialltoall(const std::vector<T> &_value, std::vector<T> &_bucket, const size_t _chunk_size) -> std::unique_ptr<ialltoall_request<std::vector<T>>>;
+    auto ialltoall(const char _value, std::string &_bucket, const size_t _chunk_size) -> std::unique_ptr<ialltoall_request<std::string>>;
+    auto ialltoall(const char *_value, std::string &_bucket, const size_t _chunk_size) -> std::unique_ptr<ialltoall_request<std::string>>;
+    auto ialltoall(const std::string &_value, std::string &_bucket, const size_t _chunk_size) -> std::unique_ptr<ialltoall_request<std::string>>;
+    template <class T>
+    auto ialltoall(const T &_value, const size_t _chunk_size) -> std::unique_ptr<ialltoall_reply<std::vector<T>>>;
+    template <class T>
+    auto ialltoall(const std::vector<T> &_value, const size_t _chunk_size) -> std::unique_ptr<ialltoall_reply<std::vector<T>>>;
+    auto ialltoall(const char _value, const size_t _chunk_size) -> std::unique_ptr<ialltoall_reply<std::string>>;
+    auto ialltoall(const char *_value, const size_t _chunk_size) -> std::unique_ptr<ialltoall_reply<std::string>>;
+    auto ialltoall(const std::string &_value, const size_t _chunk_size) -> std::unique_ptr<ialltoall_reply<std::string>>;
 
     auto barrier() -> void;
     auto ibarrier() -> std::unique_ptr<ibarrier_request>;
@@ -460,10 +478,10 @@ private:
     int _source;
     size_t _chunk_size;
     T _value;
-    T& _bucket;
+    T &_bucket;
 
 public:
-    iscatter_request(int _source, MPI_Comm _comm, const T &_value, T& _bucket, const size_t _chunk_size);
+    iscatter_request(int _source, MPI_Comm _comm, const T &_value, T &_bucket, const size_t _chunk_size);
 };
 template <>
 class iscatter_request<std::string> : public request
@@ -476,7 +494,7 @@ private:
     std::string &_bucket;
 
 public:
-    iscatter_request(int _source, MPI_Comm _comm, const std::string &_value, std::string & _bucket, const size_t _chunk_size);
+    iscatter_request(int _source, MPI_Comm _comm, const std::string &_value, std::string &_bucket, const size_t _chunk_size);
     virtual auto wait() -> void;
 };
 template <class T>
@@ -512,10 +530,10 @@ class igather_request : public request
 private:
     int _dest;
     T _value;
-    T& _bucket;
+    T &_bucket;
 
 public:
-    igather_request(int _dest, MPI_Comm _comm, const T &_value, T& _bucket);
+    igather_request(int _dest, MPI_Comm _comm, const T &_value, T &_bucket);
 };
 template <>
 class igather_request<std::string> : public request
@@ -527,7 +545,7 @@ private:
     std::string &_bucket;
 
 public:
-    igather_request(int _dest, MPI_Comm _comm, const std::string &_value, std::string & _bucket);
+    igather_request(int _dest, MPI_Comm _comm, const std::string &_value, std::string &_bucket);
     virtual auto wait() -> void;
 };
 template <class T>
@@ -560,10 +578,10 @@ class iallgather_request : public request
 {
 private:
     T _value;
-    T& _bucket;
+    T &_bucket;
 
 public:
-    iallgather_request(MPI_Comm _comm, const T &_value, T& _bucket);
+    iallgather_request(MPI_Comm _comm, const T &_value, T &_bucket);
 };
 template <>
 class iallgather_request<std::string> : public request
@@ -574,7 +592,7 @@ private:
     std::string &_bucket;
 
 public:
-    iallgather_request(MPI_Comm _comm, const std::string &_value, std::string & _bucket);
+    iallgather_request(MPI_Comm _comm, const std::string &_value, std::string &_bucket);
     virtual auto wait() -> void;
 };
 template <class T>
@@ -597,6 +615,55 @@ private:
 
 public:
     iallgather_reply(MPI_Comm _comm, const std::string &_value);
+    auto get() -> std::string;
+};
+
+template <class T>
+class ialltoall_request : public request
+{
+private:
+    size_t _chunk_size;
+    T _value;
+    T &_bucket;
+
+public:
+    ialltoall_request(MPI_Comm _comm, const T &_value, T &_bucket, const size_t _chunk_size);
+};
+template <>
+class ialltoall_request<std::string> : public request
+{
+private:
+    size_t _chunk_size;
+    std::string _value;
+    std::unique_ptr<char[]> _c_str;
+    std::string &_bucket;
+
+public:
+    ialltoall_request(MPI_Comm _comm, const std::string &_value, std::string &_bucket, const size_t _chunk_size);
+    virtual auto wait() -> void;
+};
+template <class T>
+class ialltoall_reply : public request
+{
+private:
+    size_t _chunk_size;
+    T _value;
+    T _bucket;
+
+public:
+    ialltoall_reply(MPI_Comm _comm, const T &_value, const size_t _chunk_size);
+    auto get() -> T;
+};
+template <>
+class ialltoall_reply<std::string> : public request
+{
+private:
+    size_t _chunk_size;
+    std::string _value;
+    std::unique_ptr<char[]> _c_str;
+
+public:
+    ialltoall_reply(MPI_Comm _comm, const std::string &_value, const size_t _chunk_size);
     auto get() -> std::string;
 };
 #pragma endregion

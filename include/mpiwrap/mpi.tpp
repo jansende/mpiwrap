@@ -385,6 +385,31 @@ auto iallgather_impl(MPI_Comm _comm, MPI_Request *_request, const std::vector<T>
     MPI_Iallgather(_value.data(), _chunk_size, type_wrapper<T>{}, _bucket.data(), _chunk_size, type_wrapper<T>{}, _comm, _request);
 }
 #pragma endregion
+#pragma region nonblocking alltoall
+//declarations
+auto ialltoall_impl(MPI_Comm _comm, MPI_Request *_request, const std::string &_value, std::unique_ptr<char[]> &_bucket, const size_t _chunk_size) -> void;
+//templates
+template <class T>
+auto ialltoall_impl(MPI_Comm _comm, MPI_Request *_request, const std::vector<T> &_value, std::vector<T> &_bucket, const size_t _chunk_size) -> void
+{
+    paranoidly_assert((initialized()));
+    paranoidly_assert((!finalized()));
+    //get current rank
+    auto _rank = comm(_comm)->rank();
+    //broadcast the size before the data is gathered
+    auto _size = (_rank == 0) ? static_cast<int>(_value.size()) : int{};
+    comm(_comm)->source(0)->bcast(_size);
+    //check size
+    assert((_value.size() == _size));
+    //double check size
+    assert((_size >= _chunk_size * comm(_comm)->size()));
+    //resize bucket to take all elements
+    if (_size != _bucket.size())
+        _bucket.resize(_size);
+    //gather the data
+    MPI_Ialltoall(_value.data(), _chunk_size, type_wrapper<T>{}, _bucket.data(), _chunk_size, type_wrapper<T>{}, _comm, _request);
+}
+#pragma endregion
 #pragma region nonblocking broadcast
 //declarations
 auto ibcast_impl(int _source, MPI_Comm _comm, MPI_Request *_request, std::string &_value) -> void;
@@ -607,6 +632,26 @@ auto communicator::alltoall(const std::vector<T> &_value, const size_t _chunk_si
     alltoall(_value, _bucket, _chunk_size);
     return _bucket;
 }
+template <class T>
+auto communicator::ialltoall(const T &_value, std::vector<T> &_bucket, const size_t _chunk_size) -> std::unique_ptr<ialltoall_request<std::vector<T>>>
+{
+    return ialltoall(std::vector<T>{_value}, _bucket, _chunk_size);
+}
+template <class T>
+auto communicator::ialltoall(const std::vector<T> &_value, std::vector<T> &_bucket, const size_t _chunk_size) -> std::unique_ptr<ialltoall_request<std::vector<T>>>
+{
+    return std::make_unique<ialltoall_request<std::vector<T>>>(_comm, _value, _bucket, _chunk_size);
+}
+template <class T>
+auto communicator::ialltoall(const T &_value, const size_t _chunk_size) -> std::unique_ptr<ialltoall_reply<std::vector<T>>>
+{
+    return ialltoall(std::vector<T>{_value}, _chunk_size);
+}
+template <class T>
+auto communicator::ialltoall(const std::vector<T> &_value, const size_t _chunk_size) -> std::unique_ptr<ialltoall_reply<std::vector<T>>>
+{
+    return std::make_unique<ialltoall_reply<std::vector<T>>>(_comm, _value, _chunk_size);
+}
 
 template <class T>
 auto communicator::allreduce(const T &_value, T &_bucket, MPI_Op _operation) -> void
@@ -821,6 +866,23 @@ iallgather_reply<T>::iallgather_reply(MPI_Comm _comm, const T &_value) : request
 }
 template <class T>
 auto iallgather_reply<T>::get() -> T
+{
+    this->wait();
+    return _bucket;
+}
+
+template <class T>
+ialltoall_request<T>::ialltoall_request(MPI_Comm _comm, const T &_value, T &_bucket, const size_t _chunk_size) : request(_comm), _chunk_size(_chunk_size), _value(_value), _bucket(_bucket)
+{
+    ialltoall_impl(this->_comm, &this->_request, this->_value, this->_bucket, this->_chunk_size);
+}
+template <class T>
+ialltoall_reply<T>::ialltoall_reply(MPI_Comm _comm, const T &_value, const size_t _chunk_size) : request(_comm), _chunk_size(_chunk_size), _value(_value), _bucket(T{})
+{
+    ialltoall_impl(this->_comm, &this->_request, this->_value, this->_bucket, this->_chunk_size);
+}
+template <class T>
+auto ialltoall_reply<T>::get() -> T
 {
     this->wait();
     return _bucket;

@@ -56,7 +56,7 @@ This is a list of the currently implemented MPI functions, and their usage with 
 | MPI_Allgatherv                 | :x:                |         |                                                                        |
 | MPI_Alloc_mem                  | :x:                |         |                                                                        |
 | MPI_Allreduce                  | :heavy_check_mark: |         | `mpi::comm([COMM])->allreduce([VALUE], [BUCKET], [OP])`                |
-| MPI_Alltoall                   | :heavy_check_mark: |         | `mpi::comm([COMM])->allreduce([VALUE], [BUCKET], [CHUNKSIZE])`         |
+| MPI_Alltoall                   | :heavy_check_mark: |         | `mpi::comm([COMM])->alltoall([VALUE], [BUCKET], [CHUNKSIZE])`          |
 | MPI_Alltoallv                  | :x:                |         |                                                                        |
 | MPI_Alltoallw                  | :x:                |         |                                                                        |
 | MPI_Attr_delete                | :x:                |         |                                                                        |
@@ -225,7 +225,7 @@ This is a list of the currently implemented MPI functions, and their usage with 
 | MPI_Iallgather                 | :heavy_check_mark: |         | `mpi::comm([COMM])->iallgather([VALUE], [BUCKET])`                     |
 | MPI_Iallgatherv                | :x:                |         |                                                                        |
 | MPI_Iallreduce                 | :x:                |         |                                                                        |
-| MPI_Ialltoall                  | :x:                |         |                                                                        |
+| MPI_Ialltoall                  | :heavy_check_mark: |         | `mpi::comm([COMM])->ialltoall([VALUE], [BUCKET], [CHUNKSIZE])`         |
 | MPI_Ialltoallv                 | :x:                |         |                                                                        |
 | MPI_Ialltoallw                 | :x:                |         |                                                                        |
 | MPI_Ibarrier                   | :heavy_check_mark: |         | `mpi::comm([COMM])->ibarrier()`                                        |

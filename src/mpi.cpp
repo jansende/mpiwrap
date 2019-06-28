@@ -295,6 +295,26 @@ auto iallgather_impl(MPI_Comm _comm, MPI_Request *_request, const std::string &_
     MPI_Iallgather(_value.c_str(), _chunk_size, MPI_CHAR, _bucket.get(), _chunk_size, MPI_CHAR, _comm, _request);
 }
 #pragma endregion
+#pragma region nonblocking alltoall
+auto ialltoall_impl(MPI_Comm _comm, MPI_Request *_request, const std::string &_value, std::unique_ptr<char[]> &_bucket, const size_t _chunk_size) -> void
+{
+    paranoidly_assert((initialized()));
+    paranoidly_assert((!finalized()));
+    //get current rank
+    auto _rank = comm(_comm)->rank();
+    //broadcast the size before the data is gathered
+    auto _size = (_rank == 0) ? static_cast<int>(_value.size()) : int{};
+    comm(_comm)->source(0)->bcast(_size);
+    //check size
+    assert((_value.size() == _size));
+    //double check size
+    assert((_size >= _chunk_size * comm(_comm)->size()));
+    //we need to allocate some memory for the result
+    _bucket = std::make_unique<char[]>(_size + 1);
+    //gather the data
+    MPI_Ialltoall(_value.c_str(), _chunk_size, MPI_CHAR, _bucket.get(), _chunk_size, MPI_CHAR, _comm, _request);
+}
+#pragma endregion
 #pragma region nonblocking broadcast
 auto ibcast_impl(int _source, MPI_Comm _comm, MPI_Request *_request, std::unique_ptr<char[]> &_value) -> void
 {
@@ -510,6 +530,30 @@ auto communicator::alltoall(const std::string &_value, const size_t _chunk_size)
     auto _bucket = std::string{};
     alltoall(_value, _bucket, _chunk_size);
     return _bucket;
+}
+auto communicator::ialltoall(const char _value, std::string &_bucket, const size_t _chunk_size) -> std::unique_ptr<ialltoall_request<std::string>>
+{
+    return ialltoall(std::string{_value}, _bucket, _chunk_size);
+}
+auto communicator::ialltoall(const char *_value, std::string &_bucket, const size_t _chunk_size) -> std::unique_ptr<ialltoall_request<std::string>>
+{
+    return ialltoall(std::string{_value}, _bucket, _chunk_size);
+}
+auto communicator::ialltoall(const std::string &_value, std::string &_bucket, const size_t _chunk_size) -> std::unique_ptr<ialltoall_request<std::string>>
+{
+    return std::make_unique<ialltoall_request<std::string>>(_comm, _value, _bucket, _chunk_size);
+}
+auto communicator::ialltoall(const char _value, const size_t _chunk_size) -> std::unique_ptr<ialltoall_reply<std::string>>
+{
+    return ialltoall(std::string{_value}, _chunk_size);
+}
+auto communicator::ialltoall(const char *_value, const size_t _chunk_size) -> std::unique_ptr<ialltoall_reply<std::string>>
+{
+    return ialltoall(std::string{_value}, _chunk_size);
+}
+auto communicator::ialltoall(const std::string &_value, const size_t _chunk_size) -> std::unique_ptr<ialltoall_reply<std::string>>
+{
+    return std::make_unique<ialltoall_reply<std::string>>(_comm, _value, _chunk_size);
 }
 
 auto communicator::barrier() -> void
@@ -769,6 +813,29 @@ iallgather_reply<std::string>::iallgather_reply(MPI_Comm _comm, const std::strin
     iallgather_impl(this->_comm, &this->_request, this->_value, this->_c_str);
 }
 auto iallgather_reply<std::string>::get() -> std::string
+{
+    this->wait();
+    return std::string{this->_c_str.get()};
+}
+
+ialltoall_request<std::string>::ialltoall_request(MPI_Comm _comm, const std::string &_value, std::string &_bucket, const size_t _chunk_size) : request(_comm), _chunk_size(_chunk_size), _value(_value), _bucket(_bucket)
+{
+    ialltoall_impl(this->_comm, &this->_request, this->_value, this->_c_str, this->_chunk_size);
+}
+auto ialltoall_request<std::string>::wait() -> void
+{
+    if (!this->is_finished && !this->is_canceled)
+    {
+        MPI_Wait(&this->_request, &this->_status);
+        this->is_finished = true;
+    }
+    this->_bucket = std::string{this->_c_str.get()};
+}
+ialltoall_reply<std::string>::ialltoall_reply(MPI_Comm _comm, const std::string &_value, const size_t _chunk_size) : request(_comm), _chunk_size(_chunk_size), _value(_value)
+{
+    ialltoall_impl(this->_comm, &this->_request, this->_value, this->_c_str, this->_chunk_size);
+}
+auto ialltoall_reply<std::string>::get() -> std::string
 {
     this->wait();
     return std::string{this->_c_str.get()};
