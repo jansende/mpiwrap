@@ -40,7 +40,7 @@ int main(int argc, char **argv)
 ```
 
 # Functions
-This is a list of the currently implemented MPI functions, and their usage with the **mpiwrap** wrapper. Values marked with bracket mean, that you have to substitute reasonable values there. For example: `[COMM]` is a `MPI_Comm` value, `[VALUE]` and `[BUCKET]` can be either single variables or `std::vectors`, and `[OP]` is a `MPI_Op` value. `[CHUNKSIZE]` and `[RANK]` are both positive integer values.
+This is a list of the currently implemented MPI functions, and their usage with the **mpiwrap** wrapper. Values marked with bracket mean, that you have to substitute reasonable values there. For example: `[COMM]` is a `MPI_Comm` value, `[VALUE]` and `[BUCKET]` can be either single variables or `std::vectors`, and `[OP]` is a either a `mpi` operation, a lambda, a functor, or a wrapped function. `[CHUNKSIZE]` and `[RANK]` are both positive integer values.
 
 | MPI Function                   | Implemented        | Version | Usage with the **mpiwrap** wrapper                                     |
 |:-------------------------------|:------------------:|:-------:|:-----------------------------------------------------------------------|
@@ -277,9 +277,9 @@ This is a list of the currently implemented MPI functions, and their usage with 
 | MPI_Neighbor_alltoall          | :x:                |         |                                                                        |
 | MPI_Neighbor_alltoallv         | :x:                |         |                                                                        |
 | MPI_Neighbor_alltoallw         | :x:                |         |                                                                        |
-| MPI_Op_commute                 | :heavy_check_mark: |         | `.commutes()` on the `mpi::op_proxy` object.                           |
+| MPI_Op_commute                 | :heavy_check_mark: |         | `.commutes()` on the `mpi::op` object.                                 |
 | MPI_Op_create                  | :heavy_check_mark: |         | `mpi::make_op<T>([LAMBDA])` or `mpi::make_op<T>(mpi::wrap<T,[FUNC]>)`¹ |
-| MPI_Op_free                    | :heavy_check_mark: |         | Automatically called by the `mpi::make_op` object (`mpi::op_proxy`).   |
+| MPI_Op_free                    | :heavy_check_mark: |         | Automatically called by the `mpi::make_op` object (`mpi::op`).         |
 | MPI_Open_port                  | :x:                |         |                                                                        |
 | MPI_Pack                       | :x:                |         |                                                                        |
 | MPI_Pack_external              | :x:                |         |                                                                        |
@@ -436,4 +436,4 @@ This is a list of the currently implemented MPI functions, and their usage with 
 | MPI_Wtick                      | :x:                |         |                                                                        |
 | MPI_Wtime                      | :x:                |         |                                                                        |
 
-¹ MPI takes a special function signature for its operations, which is annoying to create. **mpiwrap** thus provides a proxy object (`mpi::op_proxy`) for generating this signature from a binary operation. This proxy is created by calling `mpi::make_op` with either a pure lambda or a wrapped C++ function pointer. Unfortunately due to the way C++ function pointers interact with C function pointers, we are limited to these two options. As for the MPI version, `mpi::make_op` can be provided a `commute` setting, which has a standard value of `false`.
+¹ MPI takes a special function signature for its operations, which is annoying to create. **mpiwrap** thus provides a proxy object (`mpi::op`) for generating this signature from a binary operation. This proxy is created by calling `mpi::make_op` with either a pure lambda, a functor, or a wrapped C++ function pointer. Unfortunately due to the way C++ function pointers interact with C function pointers, we are limited to these three options. Similar to the MPI version, `mpi::make_op` can be provided a `commute` setting, which has a standard value of `false`.

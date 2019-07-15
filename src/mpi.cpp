@@ -88,7 +88,7 @@ auto allgather_impl(MPI_Comm _comm, const std::string &_value, std::string &_buc
 }
 #pragma endregion
 #pragma region allreduce
-auto allreduce_impl(MPI_Comm _comm, const std::string &_value, std::string &_bucket, MPI_Op _operation) -> void
+auto allreduce_impl(MPI_Comm _comm, const std::string &_value, std::string &_bucket, op *_operation) -> void
 {
     paranoidly_assert((initialized()));
     paranoidly_assert((!finalized()));
@@ -102,7 +102,7 @@ auto allreduce_impl(MPI_Comm _comm, const std::string &_value, std::string &_buc
     //we need to allocate some memory for the result
     auto _c_str = std::make_unique<char[]>((_rank == 0) ? _size + 1 : 0);
     //reduce the data
-    MPI_Allreduce(_value.c_str(), _c_str.get(), _size, MPI_CHAR, _operation, _comm);
+    MPI_Allreduce(_value.c_str(), _c_str.get(), _size, MPI_CHAR, _operation->get(), _comm);
     //we need to write the value back
     _bucket = std::string{_c_str.get()};
 }
@@ -191,7 +191,7 @@ auto recv_impl(int _source, int _tag, MPI_Comm _comm, MPI_Status *_status, std::
 }
 #pragma endregion
 #pragma region reduce
-auto reduce_impl(int _dest, MPI_Comm _comm, const std::string &_value, std::string &_bucket, MPI_Op _operation) -> void
+auto reduce_impl(int _dest, MPI_Comm _comm, const std::string &_value, std::string &_bucket, op *_operation) -> void
 {
     paranoidly_assert((initialized()));
     paranoidly_assert((!finalized()));
@@ -205,26 +205,26 @@ auto reduce_impl(int _dest, MPI_Comm _comm, const std::string &_value, std::stri
     //we need to allocate some memory for the result
     auto _c_str = std::make_unique<char[]>((_rank == _dest) ? _size + 1 : 0);
     //reduce the data
-    MPI_Reduce(_value.c_str(), _c_str.get(), _size, MPI_CHAR, _operation, _dest, _comm);
+    MPI_Reduce(_value.c_str(), _c_str.get(), _size, MPI_CHAR, _operation->get(), _dest, _comm);
     //we need to write the value back
     if (_rank == _dest)
         _bucket = std::string{_c_str.get()};
 }
 #pragma endregion
 #pragma region local reduce
-auto reduce(const std::string &_value, std::string &_bucket, MPI_Op _operation) -> void
+auto reduce(const std::string &_value, std::string &_bucket, op *_operation) -> void
 {
     paranoidly_assert((initialized()));
     paranoidly_assert((!finalized()));
     //we need to allocate some memory for the result
     auto _c_str = std::make_unique<char[]>(_value.size() + 1);
     //reduce the data
-    MPI_Reduce_local(_value.c_str(), _c_str.get(), _value.size(), MPI_CHAR, _operation);
+    MPI_Reduce_local(_value.c_str(), _c_str.get(), _value.size(), MPI_CHAR, _operation->get());
     //we need to write the value back
     _bucket = std::string{_c_str.get()};
 }
 
-auto reduce(const std::string &_value, MPI_Op _operation) -> std::string
+auto reduce(const std::string &_value, op *_operation) -> std::string
 {
     auto _bucket = std::string{};
     reduce(_value, _bucket, _operation);
@@ -569,27 +569,27 @@ auto communicator::ibarrier() -> std::unique_ptr<ibarrier_request>
     return std::make_unique<ibarrier_request>(_comm);
 }
 
-auto communicator::allreduce(const char _value, std::string &_bucket, MPI_Op _operation) -> void
+auto communicator::allreduce(const char _value, std::string &_bucket, op *_operation) -> void
 {
     return allreduce(std::string{_value}, _bucket, _operation);
 }
-auto communicator::allreduce(const char *_value, std::string &_bucket, MPI_Op _operation) -> void
+auto communicator::allreduce(const char *_value, std::string &_bucket, op *_operation) -> void
 {
     return allreduce(std::string{_value}, _bucket, _operation);
 }
-auto communicator::allreduce(const std::string &_value, std::string &_bucket, MPI_Op _operation) -> void
+auto communicator::allreduce(const std::string &_value, std::string &_bucket, op *_operation) -> void
 {
     return allreduce_impl(_comm, _value, _bucket, _operation);
 }
-auto communicator::allreduce(const char _value, MPI_Op _operation) -> std::string
+auto communicator::allreduce(const char _value, op *_operation) -> std::string
 {
     return allreduce(std::string{_value}, _operation);
 }
-auto communicator::allreduce(const char *_value, MPI_Op _operation) -> std::string
+auto communicator::allreduce(const char *_value, op *_operation) -> std::string
 {
     return allreduce(std::string{_value}, _operation);
 }
-auto communicator::allreduce(const std::string &_value, MPI_Op _operation) -> std::string
+auto communicator::allreduce(const std::string &_value, op *_operation) -> std::string
 {
     auto _bucket = std::string{};
     allreduce(_value, _bucket, _operation);
@@ -653,6 +653,22 @@ auto communicator::operator==(const MPI_Comm &rhs) -> bool
 auto communicator::operator!=(const MPI_Comm &rhs) -> bool
 {
     return !(*this == rhs);
+}
+#pragma endregion
+#pragma region operation wrapperks
+op::op(MPI_Op _operation, const bool _commute) : _operation(_operation), _commute(_commute)
+{
+}
+op::op(const bool _commute) : _commute(_commute)
+{
+}
+auto op::get() const -> const MPI_Op &
+{
+    return _operation;
+}
+auto op::commutes() const -> bool
+{
+    return _commute;
 }
 #pragma endregion
 #pragma region request
@@ -1249,27 +1265,27 @@ auto sender::igather(const std::string &_value) -> std::unique_ptr<igather_reply
     return std::make_unique<igather_reply<std::string>>(_dest, _comm, _value);
 }
 
-auto sender::reduce(const char _value, std::string &_bucket, MPI_Op _operation) -> void
+auto sender::reduce(const char _value, std::string &_bucket, op *_operation) -> void
 {
     return reduce(std::string{_value}, _bucket, _operation);
 }
-auto sender::reduce(const char *_value, std::string &_bucket, MPI_Op _operation) -> void
+auto sender::reduce(const char *_value, std::string &_bucket, op *_operation) -> void
 {
     return reduce(std::string{_value}, _bucket, _operation);
 }
-auto sender::reduce(const std::string &_value, std::string &_bucket, MPI_Op _operation) -> void
+auto sender::reduce(const std::string &_value, std::string &_bucket, op *_operation) -> void
 {
     return reduce_impl(_dest, _comm, _value, _bucket, _operation);
 }
-auto sender::reduce(const char _value, MPI_Op _operation) -> std::string
+auto sender::reduce(const char _value, op *_operation) -> std::string
 {
     return reduce(std::string{_value}, _operation);
 }
-auto sender::reduce(const char *_value, MPI_Op _operation) -> std::string
+auto sender::reduce(const char *_value, op *_operation) -> std::string
 {
     return reduce(std::string{_value}, _operation);
 }
-auto sender::reduce(const std::string &_value, MPI_Op _operation) -> std::string
+auto sender::reduce(const std::string &_value, op *_operation) -> std::string
 {
     auto _bucket = std::string{};
     reduce(_value, _bucket, _operation);

@@ -33,18 +33,18 @@ auto allgather_impl(MPI_Comm _comm, const std::vector<T> &_value, std::vector<T>
 #pragma endregion
 #pragma region allreduce
 //declarations
-auto allreduce_impl(MPI_Comm _comm, const std::string &_value, std::string &_bucket, MPI_Op _operation) -> void;
+auto allreduce_impl(MPI_Comm _comm, const std::string &_value, std::string &_bucket, op *_operation) -> void;
 //templates
 template <class T>
-auto allreduce_impl(MPI_Comm _comm, const T &_value, T &_bucket, MPI_Op _operation) -> void
+auto allreduce_impl(MPI_Comm _comm, const T &_value, T &_bucket, op *_operation) -> void
 {
     paranoidly_assert((initialized()));
     paranoidly_assert((!finalized()));
     //reduce the data
-    MPI_Reduce(&_value, &_bucket, 1, type_wrapper<T>{}, _operation, _comm);
+    MPI_Reduce(&_value, &_bucket, 1, type_wrapper<T>{}, _operation->get(), _comm);
 }
 template <class T>
-auto allreduce_impl(MPI_Comm _comm, const std::vector<T> &_value, std::vector<T> &_bucket, MPI_Op _operation) -> void
+auto allreduce_impl(MPI_Comm _comm, const std::vector<T> &_value, std::vector<T> &_bucket, op *_operation) -> void
 {
     paranoidly_assert((initialized()));
     paranoidly_assert((!finalized()));
@@ -59,7 +59,7 @@ auto allreduce_impl(MPI_Comm _comm, const std::vector<T> &_value, std::vector<T>
     if (_size != _bucket.size())
         _bucket.resize(_size);
     //reduce the data
-    MPI_Allreduce(_value.data(), _bucket.data(), _size, type_wrapper<T>{}, _operation, _comm);
+    MPI_Allreduce(_value.data(), _bucket.data(), _size, type_wrapper<T>{}, _operation->get(), _comm);
 }
 #pragma endregion
 #pragma region alltoall
@@ -171,18 +171,18 @@ auto recv_impl(int _source, int _tag, MPI_Comm _comm, MPI_Status *_status, std::
 #pragma endregion
 #pragma region reduce
 //declarations
-auto reduce_impl(int _dest, MPI_Comm _comm, const std::string &_value, std::string &_bucket, MPI_Op _operation) -> void;
+auto reduce_impl(int _dest, MPI_Comm _comm, const std::string &_value, std::string &_bucket, op *_operation) -> void;
 //templates
 template <class T>
-auto reduce_impl(int _dest, MPI_Comm _comm, const T &_value, T &_bucket, MPI_Op _operation) -> void
+auto reduce_impl(int _dest, MPI_Comm _comm, const T &_value, T &_bucket, op *_operation) -> void
 {
     paranoidly_assert((initialized()));
     paranoidly_assert((!finalized()));
     //reduce the data
-    MPI_Reduce(&_value, &_bucket, 1, type_wrapper<T>{}, _operation, _dest, _comm);
+    MPI_Reduce(&_value, &_bucket, 1, type_wrapper<T>{}, _operation->get(), _dest, _comm);
 }
 template <class T>
-auto reduce_impl(int _dest, MPI_Comm _comm, const std::vector<T> &_value, std::vector<T> &_bucket, MPI_Op _operation) -> void
+auto reduce_impl(int _dest, MPI_Comm _comm, const std::vector<T> &_value, std::vector<T> &_bucket, op *_operation) -> void
 {
     paranoidly_assert((initialized()));
     paranoidly_assert((!finalized()));
@@ -200,27 +200,27 @@ auto reduce_impl(int _dest, MPI_Comm _comm, const std::vector<T> &_value, std::v
             _bucket.resize(_size);
     }
     //reduce the data
-    MPI_Reduce(_value.data(), _bucket.data(), _size, type_wrapper<T>{}, _operation, _dest, _comm);
+    MPI_Reduce(_value.data(), _bucket.data(), _size, type_wrapper<T>{}, _operation->get(), _dest, _comm);
 }
 #pragma endregion
 #pragma region local reduce
 //declarations
-auto reduce(const std::string &_value, std::string &_bucket, MPI_Op _operation) -> void;
-auto reduce(const char *_value, std::string &_bucket, MPI_Op _operation) -> void;
+auto reduce(const std::string &_value, std::string &_bucket, op *_operation) -> void;
+auto reduce(const char *_value, std::string &_bucket, op *_operation) -> void;
 
-auto reduce(const std::string &_value, MPI_Op _operation) -> std::string;
-auto reduce(const char *_value, MPI_Op _operation) -> std::string;
+auto reduce(const std::string &_value, op *_operation) -> std::string;
+auto reduce(const char *_value, op *_operation) -> std::string;
 //templates
 template <class T>
-auto reduce(const T &_value, T &_bucket, MPI_Op _operation) -> void
+auto reduce(const T &_value, T &_bucket, op *_operation) -> void
 {
     paranoidly_assert((initialized()));
     paranoidly_assert((!finalized()));
     //reduce the data
-    MPI_Reduce_local(&_value, &_bucket, 1, type_wrapper<T>{}, _operation);
+    MPI_Reduce_local(&_value, &_bucket, 1, type_wrapper<T>{}, _operation->get());
 }
 template <class T>
-auto reduce(const std::vector<T> &_value, std::vector<T> &_bucket, MPI_Op _operation) -> void
+auto reduce(const std::vector<T> &_value, std::vector<T> &_bucket, op *_operation) -> void
 {
     paranoidly_assert((initialized()));
     paranoidly_assert((!finalized()));
@@ -228,17 +228,17 @@ auto reduce(const std::vector<T> &_value, std::vector<T> &_bucket, MPI_Op _opera
     if (_value.size() != _bucket.size())
         _bucket.resize(_value.size());
     //reduce the data
-    MPI_Reduce_local(_value.data(), _bucket.data(), _value.size(), type_wrapper<T>{}, _operation);
+    MPI_Reduce_local(_value.data(), _bucket.data(), _value.size(), type_wrapper<T>{}, _operation->get());
 }
 template <class T>
-auto reduce(const std::vector<T> &_value, MPI_Op _operation) -> std::vector<T>
+auto reduce(const std::vector<T> &_value, op *_operation) -> std::vector<T>
 {
     auto _bucket = std::vector<T>{};
     reduce(_value, _bucket, _operation);
     return _bucket;
 }
 template <class T>
-auto reduce(const T _value, MPI_Op _operation) -> T
+auto reduce(const T _value, op *_operation) -> T
 {
     auto _bucket = T{};
     reduce(_value, _bucket, _operation);
@@ -246,44 +246,44 @@ auto reduce(const T _value, MPI_Op _operation) -> T
 }
 
 template <class T, class Op>
-auto reduce(const T &_value, T &_bucket, const op_proxy<T, Op> *_operation) -> void
+auto reduce(const T &_value, T &_bucket, Op _operation) -> void
 {
-    return reduce(_value, _bucket, _operation->op());
+    return reduce(_value, _bucket, make_op<T>(_operation).get());
 }
 template <class Op>
-auto reduce(const std::string &_value, std::string &_bucket, const op_proxy<std::string, Op> *_operation) -> void
+auto reduce(const std::string &_value, std::string &_bucket, Op _operation) -> void
 {
-    return reduce(_value, _bucket, _operation->op());
+    return reduce(_value, _bucket, make_op<std::string>(_operation).get());
 }
 template <class Op>
-auto reduce(const char *_value, std::string &_bucket, const op_proxy<std::string, Op> *_operation) -> void
+auto reduce(const char *_value, std::string &_bucket, Op _operation) -> void
 {
-    return reduce(_value, _bucket, _operation->op());
+    return reduce(_value, _bucket, make_op<std::string>(_operation).get());
 }
 template <class T, class Op>
-auto reduce(const std::vector<T> &_value, std::vector<T> &_bucket, const op_proxy<T, Op> *_operation) -> void
+auto reduce(const std::vector<T> &_value, std::vector<T> &_bucket, Op _operation) -> void
 {
-    return reduce(_value, _bucket, _operation->op());
+    return reduce(_value, _bucket, make_op<std::string>(_operation).get());
 }
 template <class T, class Op>
-auto reduce(const std::vector<T> &_value, const op_proxy<T, Op> *_operation) -> std::vector<T>
+auto reduce(const std::vector<T> &_value, Op _operation) -> std::vector<T>
 {
-    return reduce(_value, _operation->op());
+    return reduce(_value, make_op<T>(_operation).get());
 }
 template <class Op>
-auto reduce(const std::string &_value, const op_proxy<std::string, Op> *_operation) -> std::string
+auto reduce(const std::string &_value, const Op _operation) -> std::string
 {
-    return reduce(_value, _operation->op());
+    return reduce(_value, make_op<std::string>(_operation).get());
 }
 template <class T, class Op>
-auto reduce(const T _value, const op_proxy<T, Op> *_operation) -> T
+auto reduce(const T _value, Op _operation) -> T
 {
-    return reduce(_value, _operation->op());
+    return reduce(_value, make_op<std::string>(_operation).get());
 }
 template <class Op>
-auto reduce(const char *_value, const op_proxy<std::string, Op> *_operation) -> std::string
+auto reduce(const char *_value, Op _operation) -> std::string
 {
-    return reduce(_value, _operation->op());
+    return reduce(_value, make_op<std::string>(_operation).get());
 }
 #pragma endregion
 #pragma region scatter
@@ -654,24 +654,24 @@ auto communicator::ialltoall(const std::vector<T> &_value, const size_t _chunk_s
 }
 
 template <class T>
-auto communicator::allreduce(const T &_value, T &_bucket, MPI_Op _operation) -> void
+auto communicator::allreduce(const T &_value, T &_bucket, op *_operation) -> void
 {
     return allreduce_impl(_comm, _value, _bucket, _operation);
 }
 template <class T>
-auto communicator::allreduce(const std::vector<T> &_value, std::vector<T> &_bucket, MPI_Op _operation) -> void
+auto communicator::allreduce(const std::vector<T> &_value, std::vector<T> &_bucket, op *_operation) -> void
 {
     return allreduce_impl(_comm, _value, _bucket, _operation);
 }
 template <class T>
-auto communicator::allreduce(const T &_value, MPI_Op _operation) -> T
+auto communicator::allreduce(const T &_value, op *_operation) -> T
 {
     auto _bucket = T{};
     allreduce(_value, _bucket, _operation);
     return _bucket;
 }
 template <class T>
-auto communicator::allreduce(const std::vector<T> &_value, MPI_Op _operation) -> std::vector<T>
+auto communicator::allreduce(const std::vector<T> &_value, op *_operation) -> std::vector<T>
 {
     auto _bucket = std::vector<T>{};
     allreduce(_value, _bucket, _operation);
@@ -679,54 +679,54 @@ auto communicator::allreduce(const std::vector<T> &_value, MPI_Op _operation) ->
 }
 
 template <class T, class Op>
-auto communicator::allreduce(const T &_value, T &_bucket, const op_proxy<T, Op> *_operation) -> void
+auto communicator::allreduce(const T &_value, T &_bucket, Op _operation) -> void
 {
-    return allreduce(_value, _bucket, _operation->op());
+    return allreduce(_value, _bucket, make_op<T>(_operation).get());
 }
 template <class T, class Op>
-auto communicator::allreduce(const std::vector<T> &_value, std::vector<T> &_bucket, const op_proxy<T, Op> *_operation) -> void
+auto communicator::allreduce(const std::vector<T> &_value, std::vector<T> &_bucket, Op _operation) -> void
 {
-    return allreduce(_value, _bucket, _operation->op());
+    return allreduce(_value, _bucket, make_op<T>(_operation).get());
 }
 template <class Op>
-auto communicator::allreduce(const char _value, std::string &_bucket, const op_proxy<std::string, Op> *_operation) -> void
+auto communicator::allreduce(const char _value, std::string &_bucket, Op _operation) -> void
 {
-    return allreduce(_value, _bucket, _operation->op());
+    return allreduce(_value, _bucket, make_op<std::string>(_operation).get());
 }
 template <class Op>
-auto communicator::allreduce(const char *_value, std::string &_bucket, const op_proxy<std::string, Op> *_operation) -> void
+auto communicator::allreduce(const char *_value, std::string &_bucket, Op _operation) -> void
 {
-    return allreduce(_value, _bucket, _operation->op());
+    return allreduce(_value, _bucket, make_op<std::string>(_operation).get());
 }
 template <class Op>
-auto communicator::allreduce(const std::string &_value, std::string &_bucket, const op_proxy<std::string, Op> *_operation) -> void
+auto communicator::allreduce(const std::string &_value, std::string &_bucket, Op _operation) -> void
 {
-    return allreduce(_value, _bucket, _operation->op());
+    return allreduce(_value, _bucket, make_op<std::string>(_operation).get());
 }
 template <class T, class Op>
-auto communicator::allreduce(const T &_value, const op_proxy<T, Op> *_operation) -> T
+auto communicator::allreduce(const T &_value, Op _operation) -> T
 {
-    return allreduce(_value, _operation->op());
+    return allreduce(_value, make_op<T>(_operation).get());
 }
 template <class T, class Op>
-auto communicator::allreduce(const std::vector<T> &_value, const op_proxy<T, Op> *_operation) -> std::vector<T>
+auto communicator::allreduce(const std::vector<T> &_value, Op _operation) -> std::vector<T>
 {
-    return allreduce(_value, _operation->op());
+    return allreduce(_value, make_op<T>(_operation).get());
 }
 template <class Op>
-auto communicator::allreduce(const char _value, const op_proxy<std::string, Op> *_operation) -> std::string
+auto communicator::allreduce(const char _value, Op _operation) -> std::string
 {
-    return allreduce(_value, _operation->op());
+    return allreduce(_value, make_op<std::string>(_operation).get());
 }
 template <class Op>
-auto communicator::allreduce(const char *_value, const op_proxy<std::string, Op> *_operation) -> std::string
+auto communicator::allreduce(const char *_value, Op _operation) -> std::string
 {
-    return allreduce(_value, _operation->op());
+    return allreduce(_value, make_op<std::string>(_operation).get());
 }
 template <class Op>
-auto communicator::allreduce(const std::string &_value, const op_proxy<std::string, Op> *_operation) -> std::string
+auto communicator::allreduce(const std::string &_value, Op _operation) -> std::string
 {
-    return allreduce(_value, _operation->op());
+    return allreduce(_value, make_op<std::string>(_operation).get());
 }
 #pragma endregion
 #pragma region operation wrapper
@@ -739,7 +739,7 @@ auto op_proxy<T, Op>::wrapper(void *void_a, void *void_b, int *len, MPI_Datatype
     std::transform(a, a + *len, b, b, op);
 }
 template <class T, class Op>
-op_proxy<T, Op>::op_proxy(Op, const bool _commute) : _commute(_commute)
+op_proxy<T, Op>::op_proxy(const bool _commute) : op(_commute)
 {
     paranoidly_assert((initialized()));
     paranoidly_assert((!finalized()));
@@ -754,21 +754,11 @@ op_proxy<T, Op>::~op_proxy()
 
     MPI_Op_free(&_operation);
 }
-template <class T, class Op>
-auto op_proxy<T, Op>::op() const -> const MPI_Op &
-{
-    return _operation;
-}
-template <class T, class Op>
-auto op_proxy<T, Op>::commutes() const -> bool
-{
-    return _commute;
-}
 
 template <class T, class Op>
-auto make_op(Op _func, const bool _commute) -> std::unique_ptr<op_proxy<T, Op>>
+auto make_op(Op _func, const bool _commute) -> std::unique_ptr<op>
 {
-    return std::make_unique<op_proxy<T, Op>>(_func, _commute);
+    return std::make_unique<op_proxy<T, Op>>(_commute);
 }
 #pragma endregion
 #pragma region request implementations
@@ -1173,24 +1163,24 @@ auto sender::igather(const std::vector<T> &_value) -> std::unique_ptr<igather_re
 }
 
 template <class T>
-auto sender::reduce(const T &_value, T &_bucket, MPI_Op _operation) -> void
+auto sender::reduce(const T &_value, T &_bucket, op *_operation) -> void
 {
     return reduce_impl(_dest, _comm, _value, _bucket, _operation);
 }
 template <class T>
-auto sender::reduce(const std::vector<T> &_value, std::vector<T> &_bucket, MPI_Op _operation) -> void
+auto sender::reduce(const std::vector<T> &_value, std::vector<T> &_bucket, op *_operation) -> void
 {
     return reduce_impl(_dest, _comm, _value, _bucket, _operation);
 }
 template <class T>
-auto sender::reduce(const T &_value, MPI_Op _operation) -> T
+auto sender::reduce(const T &_value, op *_operation) -> T
 {
     auto _bucket = T{};
     reduce(_value, _bucket, _operation);
     return _bucket;
 }
 template <class T>
-auto sender::reduce(const std::vector<T> &_value, MPI_Op _operation) -> std::vector<T>
+auto sender::reduce(const std::vector<T> &_value, op *_operation) -> std::vector<T>
 {
     auto _bucket = std::vector<T>{};
     reduce(_value, _bucket, _operation);
@@ -1198,54 +1188,54 @@ auto sender::reduce(const std::vector<T> &_value, MPI_Op _operation) -> std::vec
 }
 
 template <class T, class Op>
-auto sender::reduce(const T &_value, T &_bucket, const op_proxy<T, Op> *_operation) -> void
+auto sender::reduce(const T &_value, T &_bucket, Op _operation) -> void
 {
-    return reduce(_value, _bucket, _operation->op());
+    return reduce_impl(_dest, _comm, _value, _bucket, make_op<T>(_operation).get());
 }
 template <class T, class Op>
-auto sender::reduce(const std::vector<T> &_value, std::vector<T> &_bucket, const op_proxy<T, Op> *_operation) -> void
+auto sender::reduce(const std::vector<T> &_value, std::vector<T> &_bucket, Op _operation) -> void
 {
-    return reduce(_value, _bucket, _operation->op());
+    return reduce_impl(_dest, _comm, _value, _bucket, make_op<T>(_operation).get());
 }
 template <class Op>
-auto sender::reduce(const char _value, std::string &_bucket, const op_proxy<std::string, Op> *_operation) -> void
+auto sender::reduce(const char _value, std::string &_bucket, Op _operation) -> void
 {
-    return reduce(_value, _bucket, _operation->op());
+    return reduce(_value, _bucket, make_op<std::string>(_operation).get());
 }
 template <class Op>
-auto sender::reduce(const char *_value, std::string &_bucket, const op_proxy<std::string, Op> *_operation) -> void
+auto sender::reduce(const char *_value, std::string &_bucket, Op _operation) -> void
 {
-    return reduce(_value, _bucket, _operation->op());
+    return reduce(_value, _bucket, make_op<std::string>(_operation).get());
 }
 template <class Op>
-auto sender::reduce(const std::string &_value, std::string &_bucket, const op_proxy<std::string, Op> *_operation) -> void
+auto sender::reduce(const std::string &_value, std::string &_bucket, Op _operation) -> void
 {
-    return reduce(_value, _bucket, _operation->op());
+    return reduce(_value, _bucket, make_op<std::string>(_operation).get());
 }
 template <class T, class Op>
-auto sender::reduce(const T &_value, const op_proxy<T, Op> *_operation) -> T
+auto sender::reduce(const T &_value, Op _operation) -> T
 {
-    return reduce(_value, _operation->op());
+    return reduce(_value, make_op<T>(_operation).get());
 }
 template <class T, class Op>
-auto sender::reduce(const std::vector<T> &_value, const op_proxy<T, Op> *_operation) -> std::vector<T>
+auto sender::reduce(const std::vector<T> &_value, Op _operation) -> std::vector<T>
 {
-    return reduce(_value, _operation->op());
+    return reduce(_value, make_op<T>(_operation).get());
 }
 template <class Op>
-auto sender::reduce(const char _value, const op_proxy<std::string, Op> *_operation) -> std::string
+auto sender::reduce(const char _value, Op _operation) -> std::string
 {
-    return reduce(_value, _operation->op());
+    return reduce(_value, make_op<std::string>(_operation).get());
 }
 template <class Op>
-auto sender::reduce(const char *_value, const op_proxy<std::string, Op> *_operation) -> std::string
+auto sender::reduce(const char *_value, Op _operation) -> std::string
 {
-    return reduce(_value, _operation->op());
+    return reduce(_value, make_op<std::string>(_operation).get());
 }
 template <class Op>
-auto sender::reduce(const std::string &_value, const op_proxy<std::string, Op> *_operation) -> std::string
+auto sender::reduce(const std::string &_value, Op _operation) -> std::string
 {
-    return reduce(_value, _operation->op());
+    return reduce(_value, make_op<std::string>(_operation).get());
 }
 #pragma endregion
 } // namespace mpi

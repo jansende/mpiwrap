@@ -131,8 +131,7 @@ auto version() -> version_info;
 //declarations
 class sender;
 class receiver;
-template <class T, class Op>
-class op_proxy;
+class op;
 class ibarrier_request;
 template <class T>
 class iallgather_request;
@@ -241,40 +240,40 @@ public:
     auto ibarrier() -> std::unique_ptr<ibarrier_request>;
 
     template <class T>
-    auto allreduce(const T &_value, T &_bucket, MPI_Op _operation) -> void;
+    auto allreduce(const T &_value, T &_bucket, op *_operation) -> void;
     template <class T>
-    auto allreduce(const std::vector<T> &_value, std::vector<T> &_bucket, MPI_Op _operation) -> void;
-    auto allreduce(const char _value, std::string &_bucket, MPI_Op _operation) -> void;
-    auto allreduce(const char *_value, std::string &_bucket, MPI_Op _operation) -> void;
-    auto allreduce(const std::string &_value, std::string &_bucket, MPI_Op _operation) -> void;
+    auto allreduce(const std::vector<T> &_value, std::vector<T> &_bucket, op *_operation) -> void;
+    auto allreduce(const char _value, std::string &_bucket, op *_operation) -> void;
+    auto allreduce(const char *_value, std::string &_bucket, op *_operation) -> void;
+    auto allreduce(const std::string &_value, std::string &_bucket, op *_operation) -> void;
     template <class T>
-    auto allreduce(const T &_value, MPI_Op _operation) -> T;
+    auto allreduce(const T &_value, op *_operation) -> T;
     template <class T>
-    auto allreduce(const std::vector<T> &_value, MPI_Op _operation) -> std::vector<T>;
-    auto allreduce(const char _value, MPI_Op _operation) -> std::string;
-    auto allreduce(const char *_value, MPI_Op _operation) -> std::string;
-    auto allreduce(const std::string &_value, MPI_Op _operation) -> std::string;
+    auto allreduce(const std::vector<T> &_value, op *_operation) -> std::vector<T>;
+    auto allreduce(const char _value, op *_operation) -> std::string;
+    auto allreduce(const char *_value, op *_operation) -> std::string;
+    auto allreduce(const std::string &_value, op *_operation) -> std::string;
 
     template <class T, class Op>
-    auto allreduce(const T &_value, T &_bucket, const op_proxy<T, Op> *_operation) -> void;
+    auto allreduce(const T &_value, T &_bucket, Op _operation) -> void;
     template <class T, class Op>
-    auto allreduce(const std::vector<T> &_value, std::vector<T> &_bucket, const op_proxy<T, Op> *_operation) -> void;
+    auto allreduce(const std::vector<T> &_value, std::vector<T> &_bucket, Op _operation) -> void;
     template <class Op>
-    auto allreduce(const char _value, std::string &_bucket, const op_proxy<std::string, Op> *_operation) -> void;
+    auto allreduce(const char _value, std::string &_bucket, Op _operation) -> void;
     template <class Op>
-    auto allreduce(const char *_value, std::string &_bucket, const op_proxy<std::string, Op> *_operation) -> void;
+    auto allreduce(const char *_value, std::string &_bucket, Op _operation) -> void;
     template <class Op>
-    auto allreduce(const std::string &_value, std::string &_bucket, const op_proxy<std::string, Op> *_operation) -> void;
+    auto allreduce(const std::string &_value, std::string &_bucket, Op _operation) -> void;
     template <class T, class Op>
-    auto allreduce(const T &_value, const op_proxy<T, Op> *_operation) -> T;
+    auto allreduce(const T &_value, Op _operation) -> T;
     template <class T, class Op>
-    auto allreduce(const std::vector<T> &_value, const op_proxy<T, Op> *_operation) -> std::vector<T>;
+    auto allreduce(const std::vector<T> &_value, Op _operation) -> std::vector<T>;
     template <class Op>
-    auto allreduce(const char _value, const op_proxy<std::string, Op> *_operation) -> std::string;
+    auto allreduce(const char _value, Op _operation) -> std::string;
     template <class Op>
-    auto allreduce(const char *_value, const op_proxy<std::string, Op> *_operation) -> std::string;
+    auto allreduce(const char *_value, Op _operation) -> std::string;
     template <class Op>
-    auto allreduce(const std::string &_value, const op_proxy<std::string, Op> *_operation) -> std::string;
+    auto allreduce(const std::string &_value, Op _operation) -> std::string;
 };
 #pragma endregion
 #pragma region comm
@@ -288,29 +287,40 @@ auto compare(const MPI_Comm &lhs, const communicator &rhs) -> communicator::comp
 auto compare(const communicator &lhs, const communicator &rhs) -> communicator::comp;
 #pragma endregion
 #pragma region operation wrapper
-template <class T, class Op>
-class op_proxy
+class op
 {
-private:
+protected:
     MPI_Op _operation;
     const bool _commute;
-
-    static auto wrapper(void *void_a, void *void_b, int *len, MPI_Datatype *) -> void;
+    op(MPI_Op _operation, const bool _commute);
+    op(const bool _commute);
 
 public:
-    op_proxy(const op_proxy &) = delete;
-    op_proxy(op_proxy &&) = delete;
-    op_proxy &operator=(const op_proxy &) = delete;
+    op(const op &) = delete;
+    op(op &&) = delete;
+    op &operator=(const op &) = delete;
 
-    op_proxy(Op, const bool _commute);
-    ~op_proxy();
+    virtual ~op() = default;
 
-    auto op() const -> const MPI_Op &;
+    auto get() const -> const MPI_Op &;
     auto commutes() const -> bool;
 };
 
 template <class T, class Op>
-auto make_op(Op _func, const bool _commute = false) -> std::unique_ptr<op_proxy<T, Op>>;
+class op_proxy : public op
+{
+private:
+    static auto wrapper(void *void_a, void *void_b, int *len, MPI_Datatype *) -> void;
+
+public:
+    using op::op;
+
+    op_proxy(const bool _commute);
+    virtual ~op_proxy();
+};
+
+template <class T, class Op>
+auto make_op(Op _func, const bool _commute = false) -> std::unique_ptr<op>;
 #pragma endregion
 #pragma region request
 class request
@@ -860,43 +870,45 @@ public:
     auto igather(const std::string &_value) -> std::unique_ptr<igather_reply<std::string>>;
 
     template <class T>
-    auto reduce(const T &_value, T &_bucket, MPI_Op _operation) -> void;
+    auto reduce(const T &_value, T &_bucket, op *_operation) -> void;
     template <class T>
-    auto reduce(const std::vector<T> &_value, std::vector<T> &_bucket, MPI_Op _operation) -> void;
-    auto reduce(const char _value, std::string &_bucket, MPI_Op _operation) -> void;
-    auto reduce(const char *_value, std::string &_bucket, MPI_Op _operation) -> void;
-    auto reduce(const std::string &_value, std::string &_bucket, MPI_Op _operation) -> void;
+    auto reduce(const std::vector<T> &_value, std::vector<T> &_bucket, op *_operation) -> void;
+    auto reduce(const char _value, std::string &_bucket, op *_operation) -> void;
+    auto reduce(const char *_value, std::string &_bucket, op *_operation) -> void;
+    auto reduce(const std::string &_value, std::string &_bucket, op *_operation) -> void;
     template <class T>
-    auto reduce(const T &_value, MPI_Op _operation) -> T;
+    auto reduce(const T &_value, op *_operation) -> T;
     template <class T>
-    auto reduce(const std::vector<T> &_value, MPI_Op _operation) -> std::vector<T>;
-    auto reduce(const char _value, MPI_Op _operation) -> std::string;
-    auto reduce(const char *_value, MPI_Op _operation) -> std::string;
-    auto reduce(const std::string &_value, MPI_Op _operation) -> std::string;
+    auto reduce(const std::vector<T> &_value, op *_operation) -> std::vector<T>;
+    auto reduce(const char _value, op *_operation) -> std::string;
+    auto reduce(const char *_value, op *_operation) -> std::string;
+    auto reduce(const std::string &_value, op *_operation) -> std::string;
 
     template <class T, class Op>
-    auto reduce(const T &_value, T &_bucket, const op_proxy<T, Op> *_operation) -> void;
+    auto reduce(const T &_value, T &_bucket, Op _operation) -> void;
     template <class T, class Op>
-    auto reduce(const std::vector<T> &_value, std::vector<T> &_bucket, const op_proxy<T, Op> *_operation) -> void;
+    auto reduce(const std::vector<T> &_value, std::vector<T> &_bucket, Op _operation) -> void;
     template <class Op>
-    auto reduce(const char _value, std::string &_bucket, const op_proxy<std::string, Op> *_operation) -> void;
+    auto reduce(const char _value, std::string &_bucket, Op _operation) -> void;
     template <class Op>
-    auto reduce(const char *_value, std::string &_bucket, const op_proxy<std::string, Op> *_operation) -> void;
+    auto reduce(const char *_value, std::string &_bucket, Op _operation) -> void;
     template <class Op>
-    auto reduce(const std::string &_value, std::string &_bucket, const op_proxy<std::string, Op> *_operation) -> void;
+    auto reduce(const std::string &_value, std::string &_bucket, Op _operation) -> void;
     template <class T, class Op>
-    auto reduce(const T &_value, const op_proxy<T, Op> *_operation) -> T;
+    auto reduce(const T &_value, Op _operation) -> T;
     template <class T, class Op>
-    auto reduce(const std::vector<T> &_value, const op_proxy<T, Op> *_operation) -> std::vector<T>;
+    auto reduce(const std::vector<T> &_value, Op _operation) -> std::vector<T>;
     template <class Op>
-    auto reduce(const char _value, const op_proxy<std::string, Op> *_operation) -> std::string;
+    auto reduce(const char _value, Op _operation) -> std::string;
     template <class Op>
-    auto reduce(const char *_value, const op_proxy<std::string, Op> *_operation) -> std::string;
+    auto reduce(const char *_value, Op _operation) -> std::string;
     template <class Op>
-    auto reduce(const std::string &_value, const op_proxy<std::string, Op> *_operation) -> std::string;
+    auto reduce(const std::string &_value, Op _operation) -> std::string;
 };
 #pragma endregion
 } // namespace mpi
 
 //finally include the definitions
 #include <mpiwrap/mpi.tpp>
+//include the operator overloads as well
+#include <mpiwrap/impl/ops.h>
