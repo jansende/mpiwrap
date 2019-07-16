@@ -906,9 +906,9 @@ public:
     auto recv(T &_value) -> void;
     template <class T>
     auto recv() -> T;
-    template <class T>
 #pragma endregion
 #pragma region irecv
+    template <class T>
     auto irecv(T &_value) -> std::unique_ptr<irecv_request<T>>;
     template <class T>
     auto irecv() -> std::unique_ptr<irecv_reply<T>>;
