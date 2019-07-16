@@ -64,10 +64,10 @@ This is a list of the currently implemented MPI functions, and their usage with 
 | MPI_Attr_put                   | :x:                |         |                                                                        |
 | MPI_Barrier                    | :heavy_check_mark: |         | `mpi::comm([COMM])->barrier()`                                         |
 | MPI_Bcast                      | :heavy_check_mark: |         | `mpi::comm([COMM])->source([RANK])->bcast[VALUE])`                     |
-| MPI_Bsend                      | :x:                |         | Will not be implemented because raw memory management is required.     |
-| MPI_Bsend_init                 | :x:                |         | Will not be implemented because raw memory management is required.     |
-| MPI_Buffer_attach              | :x:                |         | Will not be implemented because raw memory management is required.     |
-| MPI_Buffer_detach              | :x:                |         | Will not be implemented because raw memory management is required.     |
+| MPI_Bsend                      | :no_entry_sign:    |         | Will not be implemented because raw memory management is required.     |
+| MPI_Bsend_init                 | :no_entry_sign:    |         | Will not be implemented because raw memory management is required.     |
+| MPI_Buffer_attach              | :no_entry_sign:    |         | Will not be implemented because raw memory management is required.     |
+| MPI_Buffer_detach              | :no_entry_sign:    |         | Will not be implemented because raw memory management is required.     |
 | MPI_Cancel                     | :heavy_check_mark: |         | `.cancel()` on the `mpi::request` object.                              |
 | MPI_Cart_coords                | :x:                |         |                                                                        |
 | MPI_Cart_create                | :x:                |         |                                                                        |
@@ -230,7 +230,7 @@ This is a list of the currently implemented MPI functions, and their usage with 
 | MPI_Ialltoallw                 | :x:                |         |                                                                        |
 | MPI_Ibarrier                   | :heavy_check_mark: |         | `mpi::comm([COMM])->ibarrier()`                                        |
 | MPI_Ibcast                     | :heavy_check_mark: |         | `mpi::comm([COMM])->source([RANK])->ibcast[VALUE])`                    |
-| MPI_Ibsend                     | :x:                |         | Will not be implemented because raw memory management is required.     |
+| MPI_Ibsend                     | :no_entry_sign:    |         | Will not be implemented because raw memory management is required.     |
 | MPI_Iexscan                    | :x:                |         |                                                                        |
 | MPI_Igather                    | :heavy_check_mark: |         | `mpi::comm([COMM])->dest([RANK])->igather([VALUE], [BUCKET])`          |
 | MPI_Igatherv                   | :x:                |         |                                                                        |
