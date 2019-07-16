@@ -224,7 +224,7 @@ This is a list of the currently implemented MPI functions, and their usage with 
 | MPI_Group_union                | :x:                |         |                                                                        |
 | MPI_Iallgather                 | :heavy_check_mark: |         | `mpi::comm([COMM])->iallgather([VALUE], [BUCKET])`                     |
 | MPI_Iallgatherv                | :x:                |         |                                                                        |
-| MPI_Iallreduce                 | :x:                |         |                                                                        |
+| MPI_Iallreduce                 | :heavy_check_mark: |         | `mpi::comm([COMM])->iallreduce([VALUE], [BUCKET], [OP])`               |
 | MPI_Ialltoall                  | :heavy_check_mark: |         | `mpi::comm([COMM])->ialltoall([VALUE], [BUCKET], [CHUNKSIZE])`         |
 | MPI_Ialltoallv                 | :x:                |         |                                                                        |
 | MPI_Ialltoallw                 | :x:                |         |                                                                        |
@@ -257,7 +257,7 @@ This is a list of the currently implemented MPI functions, and their usage with 
 | MPI_Intercomm_merge            | :x:                |         |                                                                        |
 | MPI_Iprobe                     | :x:                |         |                                                                        |
 | MPI_Irecv                      | :heavy_check_mark: |         | `mpi::comm([COMM])->source([RANK])->irecv([BUCKET])`                   |
-| MPI_Ireduce                    | :x:                |         |                                                                        |
+| MPI_Ireduce                    | :heavy_check_mark: |         | `mpi::comm([COMM])->dest([RANK])->ireduce([VALUE], [BUCKET], [OP])`    |
 | MPI_Ireduce_scatter            | :x:                |         |                                                                        |
 | MPI_Ireduce_scatter_block      | :x:                |         |                                                                        |
 | MPI_Irsend                     | :heavy_check_mark: |         | `mpi::comm([COMM])->dest([RANK])->irsend([VALUE])`                     |

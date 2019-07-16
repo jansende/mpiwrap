@@ -295,6 +295,24 @@ auto iallgather_impl(MPI_Comm _comm, MPI_Request *_request, const std::string &_
     MPI_Iallgather(_value.c_str(), _chunk_size, MPI_CHAR, _bucket.get(), _chunk_size, MPI_CHAR, _comm, _request);
 }
 #pragma endregion
+#pragma region nonblocking allreduce
+auto iallreduce_impl(MPI_Comm _comm, MPI_Request *_request, const std::string &_value, std::unique_ptr<char[]> &_bucket, op *_operation) -> void
+{
+    paranoidly_assert((initialized()));
+    paranoidly_assert((!finalized()));
+    //get current rank
+    auto _rank = comm(_comm)->rank();
+    //broadcast the chunk_size before the string is reduced
+    auto _size = (_rank == 0) ? static_cast<int>(_value.size()) : int{};
+    comm(_comm)->source(0)->bcast(_size);
+    //check size
+    assert((_value.size() == _size));
+    //we need to allocate some memory for the result
+    _bucket = std::make_unique<char[]>((_rank == 0) ? _size + 1 : 0);
+    //reduce the data
+    MPI_Iallreduce(_value.c_str(), _bucket.get(), _size, MPI_CHAR, _operation->get(), _comm, _request);
+}
+#pragma endregion
 #pragma region nonblocking alltoall
 auto ialltoall_impl(MPI_Comm _comm, MPI_Request *_request, const std::string &_value, std::unique_ptr<char[]> &_bucket, const size_t _chunk_size) -> void
 {
@@ -365,6 +383,24 @@ auto irecv_impl(int _source, int _tag, MPI_Comm _comm, MPI_Status *_status, MPI_
     _value = std::make_unique<char[]>(_size + 1);
     //we need to receive it
     MPI_Irecv(_value.get(), _size, MPI_CHAR, _source, _tag, _comm, _request);
+}
+#pragma endregion
+#pragma region nonblocking reduce
+auto ireduce_impl(int _dest, MPI_Comm _comm, MPI_Request *_request, const std::string &_value, std::unique_ptr<char[]> &_bucket, op *_operation) -> void
+{
+    paranoidly_assert((initialized()));
+    paranoidly_assert((!finalized()));
+    //get current rank
+    auto _rank = comm(_comm)->rank();
+    //broadcast the chunk_size before the string is reduced
+    auto _size = (_rank == _dest) ? static_cast<int>(_value.size()) : int{};
+    comm(_comm)->source(_dest)->bcast(_size);
+    //check size
+    assert((_value.size() == _size));
+    //we need to allocate some memory for the result
+    _bucket = std::make_unique<char[]>((_rank == _dest) ? _size + 1 : 0);
+    //reduce the data
+    MPI_Ireduce(_value.c_str(), _bucket.get(), _size, MPI_CHAR, _operation->get(), _dest, _comm, _request);
 }
 #pragma endregion
 #pragma region nonblocking scatter
@@ -594,6 +630,31 @@ auto communicator::allreduce(const std::string &_value, op *_operation) -> std::
     auto _bucket = std::string{};
     allreduce(_value, _bucket, _operation);
     return _bucket;
+}
+
+auto communicator::iallreduce(const char _value, std::string &_bucket, std::shared_ptr<op> _operation) -> std::unique_ptr<iallreduce_request<std::string>>
+{
+    return iallreduce(std::string{_value}, _bucket, _operation);
+}
+auto communicator::iallreduce(const char *_value, std::string &_bucket, std::shared_ptr<op> _operation) -> std::unique_ptr<iallreduce_request<std::string>>
+{
+    return iallreduce(std::string{_value}, _bucket, _operation);
+}
+auto communicator::iallreduce(const std::string &_value, std::string &_bucket, std::shared_ptr<op> _operation) -> std::unique_ptr<iallreduce_request<std::string>>
+{
+    return std::make_unique<iallreduce_request<std::string>>(_comm, _value, _bucket, _operation);
+}
+auto communicator::iallreduce(const char _value, std::shared_ptr<op> _operation) -> std::unique_ptr<iallreduce_reply<std::string>>
+{
+    return iallreduce(std::string{_value}, _operation);
+}
+auto communicator::iallreduce(const char *_value, std::shared_ptr<op> _operation) -> std::unique_ptr<iallreduce_reply<std::string>>
+{
+    return iallreduce(std::string{_value}, _operation);
+}
+auto communicator::iallreduce(const std::string &_value, std::shared_ptr<op> _operation) -> std::unique_ptr<iallreduce_reply<std::string>>
+{
+    return std::make_unique<iallreduce_reply<std::string>>(_comm, _value, _operation);
 }
 #pragma endregion
 #pragma region comm
@@ -852,6 +913,52 @@ ialltoall_reply<std::string>::ialltoall_reply(MPI_Comm _comm, const std::string 
     ialltoall_impl(this->_comm, &this->_request, this->_value, this->_c_str, this->_chunk_size);
 }
 auto ialltoall_reply<std::string>::get() -> std::string
+{
+    this->wait();
+    return std::string{this->_c_str.get()};
+}
+
+ireduce_request<std::string>::ireduce_request(int _dest, MPI_Comm _comm, const std::string &_value, std::string &_bucket, std::shared_ptr<op> _operation) : request(_comm), _operation(_operation), _dest(_dest), _value(_value), _bucket(_bucket)
+{
+    ireduce_impl(this->_dest, this->_comm, &this->_request, this->_value, this->_c_str, this->_operation.get());
+}
+auto ireduce_request<std::string>::wait() -> void
+{
+    if (!this->is_finished && !this->is_canceled)
+    {
+        MPI_Wait(&this->_request, &this->_status);
+        this->is_finished = true;
+    }
+    this->_bucket = std::string{this->_c_str.get()};
+}
+ireduce_reply<std::string>::ireduce_reply(int _dest, MPI_Comm _comm, const std::string &_value, std::shared_ptr<op> _operation) : request(_comm), _operation(_operation), _dest(_dest), _value(_value)
+{
+    ireduce_impl(this->_dest, this->_comm, &this->_request, this->_value, this->_c_str, this->_operation.get());
+}
+auto ireduce_reply<std::string>::get() -> std::string
+{
+    this->wait();
+    return std::string{this->_c_str.get()};
+}
+
+iallreduce_request<std::string>::iallreduce_request(MPI_Comm _comm, const std::string &_value, std::string &_bucket, std::shared_ptr<op> _operation) : request(_comm), _operation(_operation), _value(_value), _bucket(_bucket)
+{
+    iallreduce_impl(this->_comm, &this->_request, this->_value, this->_c_str, this->_operation.get());
+}
+auto iallreduce_request<std::string>::wait() -> void
+{
+    if (!this->is_finished && !this->is_canceled)
+    {
+        MPI_Wait(&this->_request, &this->_status);
+        this->is_finished = true;
+    }
+    this->_bucket = std::string{this->_c_str.get()};
+}
+iallreduce_reply<std::string>::iallreduce_reply(MPI_Comm _comm, const std::string &_value, std::shared_ptr<op> _operation) : request(_comm), _operation(_operation), _value(_value)
+{
+    iallreduce_impl(this->_comm, &this->_request, this->_value, this->_c_str, this->_operation.get());
+}
+auto iallreduce_reply<std::string>::get() -> std::string
 {
     this->wait();
     return std::string{this->_c_str.get()};
@@ -1290,6 +1397,31 @@ auto sender::reduce(const std::string &_value, op *_operation) -> std::string
     auto _bucket = std::string{};
     reduce(_value, _bucket, _operation);
     return _bucket;
+}
+
+auto sender::ireduce(const char _value, std::string &_bucket, std::shared_ptr<op> _operation) -> std::unique_ptr<ireduce_request<std::string>>
+{
+    return ireduce(std::string{_value}, _bucket, _operation);
+}
+auto sender::ireduce(const char *_value, std::string &_bucket, std::shared_ptr<op> _operation) -> std::unique_ptr<ireduce_request<std::string>>
+{
+    return ireduce(std::string{_value}, _bucket, _operation);
+}
+auto sender::ireduce(const std::string &_value, std::string &_bucket, std::shared_ptr<op> _operation) -> std::unique_ptr<ireduce_request<std::string>>
+{
+    return std::make_unique<ireduce_request<std::string>>(_dest, _comm, _value, _bucket, _operation);
+}
+auto sender::ireduce(const char _value, std::shared_ptr<op> _operation) -> std::unique_ptr<ireduce_reply<std::string>>
+{
+    return ireduce(std::string{_value}, _operation);
+}
+auto sender::ireduce(const char *_value, std::shared_ptr<op> _operation) -> std::unique_ptr<ireduce_reply<std::string>>
+{
+    return ireduce(std::string{_value}, _operation);
+}
+auto sender::ireduce(const std::string &_value, std::shared_ptr<op> _operation) -> std::unique_ptr<ireduce_reply<std::string>>
+{
+    return std::make_unique<ireduce_reply<std::string>>(_dest, _comm, _value, _operation);
 }
 #pragma endregion
 } // namespace mpi

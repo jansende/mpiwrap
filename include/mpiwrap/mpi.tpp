@@ -385,6 +385,37 @@ auto iallgather_impl(MPI_Comm _comm, MPI_Request *_request, const std::vector<T>
     MPI_Iallgather(_value.data(), _chunk_size, type_wrapper<T>{}, _bucket.data(), _chunk_size, type_wrapper<T>{}, _comm, _request);
 }
 #pragma endregion
+#pragma region nonblocking allreduce
+//declarations
+auto iallreduce_impl(MPI_Comm _comm, MPI_Request *_request, const std::string &_value, std::unique_ptr<char[]> &_bucket, op *_operation) -> void;
+//templates
+template <class T>
+auto iallreduce_impl(MPI_Comm _comm, MPI_Request *_request, const T &_value, T &_bucket, op *_operation) -> void
+{
+    paranoidly_assert((initialized()));
+    paranoidly_assert((!finalized()));
+    //reduce the data
+    MPI_Reduce(&_value, &_bucket, 1, type_wrapper<T>{}, _operation->get(), _comm, _request);
+}
+template <class T>
+auto iallreduce_impl(MPI_Comm _comm, MPI_Request *_request, const std::vector<T> &_value, std::vector<T> &_bucket, op *_operation) -> void
+{
+    paranoidly_assert((initialized()));
+    paranoidly_assert((!finalized()));
+    //get current rank
+    auto _rank = comm(_comm)->rank();
+    //broadcast the chunk_size before the data is reduced
+    auto _size = (_rank == 0) ? static_cast<int>(_value.size()) : int{};
+    comm(_comm)->source(0)->bcast(_size);
+    //check size
+    assert((_value.size() == _size));
+    //resize bucket to take all elements
+    if (_size != _bucket.size())
+        _bucket.resize(_size);
+    //reduce the data
+    MPI_Iallreduce(_value.data(), _bucket.data(), _size, type_wrapper<T>{}, _operation->get(), _comm, _request);
+}
+#pragma endregion
 #pragma region nonblocking alltoall
 //declarations
 auto ialltoall_impl(MPI_Comm _comm, MPI_Request *_request, const std::string &_value, std::unique_ptr<char[]> &_bucket, const size_t _chunk_size) -> void;
@@ -490,6 +521,40 @@ auto irecv_impl(int _source, int _tag, MPI_Comm _comm, MPI_Status *_status, MPI_
     _value.resize(_size);
     //we need to receive it
     MPI_Irecv(_value.data(), _size, type_wrapper<T>{}, _source, _tag, _comm, _request);
+}
+#pragma endregion
+#pragma region nonblocking reduce
+//declarations
+auto ireduce_impl(int _dest, MPI_Comm _comm, MPI_Request *_request, const std::string &_value, std::unique_ptr<char[]> &_bucket, op *_operation) -> void;
+//templates
+template <class T>
+auto ireduce_impl(int _dest, MPI_Comm _comm, MPI_Request *_request, const T &_value, T &_bucket, op *_operation) -> void
+{
+    paranoidly_assert((initialized()));
+    paranoidly_assert((!finalized()));
+    //reduce the data
+    MPI_Ireduce(&_value, &_bucket, 1, type_wrapper<T>{}, _operation->get(), _dest, _comm, _request);
+}
+template <class T>
+auto ireduce_impl(int _dest, MPI_Comm _comm, MPI_Request *_request, const std::vector<T> &_value, std::vector<T> &_bucket, op *_operation) -> void
+{
+    paranoidly_assert((initialized()));
+    paranoidly_assert((!finalized()));
+    //get current rank
+    auto _rank = comm(_comm)->rank();
+    //broadcast the chunk_size before the data is reduced
+    auto _size = (_rank == _dest) ? static_cast<int>(_value.size()) : int{};
+    comm(_comm)->source(_dest)->bcast(_size);
+    //check size
+    assert((_value.size() == _size));
+    //resize bucket to take all elements
+    if (_rank == _dest)
+    {
+        if (_size != _bucket.size())
+            _bucket.resize(_size);
+    }
+    //reduce the data
+    MPI_Ireduce(_value.data(), _bucket.data(), _size, type_wrapper<T>{}, _operation->get(), _dest, _comm, _request);
 }
 #pragma endregion
 #pragma region nonblocking scatter
@@ -728,6 +793,78 @@ auto communicator::allreduce(const std::string &_value, Op _operation) -> std::s
 {
     return allreduce(_value, make_op<std::string>(_operation).get());
 }
+
+template <class T>
+auto communicator::iallreduce(const T &_value, T &_bucket, std::shared_ptr<op> _operation) -> std::unique_ptr<iallreduce_request<T>>
+{
+    return std::make_unique<iallreduce_request<T>>(_comm, _value, _bucket, _operation);
+}
+template <class T>
+auto communicator::iallreduce(const std::vector<T> &_value, std::vector<T> &_bucket, std::shared_ptr<op> _operation) -> std::unique_ptr<iallreduce_request<std::vector<T>>>
+{
+    return std::make_unique<iallreduce_request<std::vector<T>>>(_comm, _value, _bucket, _operation);
+}
+template <class T>
+auto communicator::iallreduce(const T &_value, std::shared_ptr<op> _operation) -> std::unique_ptr<iallreduce_reply<T>>
+{
+    return std::make_unique<iallreduce_reply<T>>(_comm, _value, _operation);
+}
+template <class T>
+auto communicator::iallreduce(const std::vector<T> &_value, std::shared_ptr<op> _operation) -> std::unique_ptr<iallreduce_reply<std::vector<T>>>
+{
+    return std::make_unique<iallreduce_reply<std::vector<T>>>(_comm, _value, _operation);
+}
+
+template <class T, class Op>
+auto communicator::iallreduce(const T &_value, T &_bucket, Op _operation) -> std::unique_ptr<iallreduce_request<T>>
+{
+    return iallreduce(_value, _bucket, make_op<T>(_operation));
+}
+template <class T, class Op>
+auto communicator::iallreduce(const std::vector<T> &_value, std::vector<T> &_bucket, Op _operation) -> std::unique_ptr<iallreduce_request<std::vector<T>>>
+{
+    return iallreduce(_value, _bucket, make_op<T>(_operation));
+}
+template <class Op>
+auto communicator::iallreduce(const char _value, std::string &_bucket, Op _operation) -> std::unique_ptr<iallreduce_request<std::string>>
+{
+    return iallreduce(_value, _bucket, make_op<std::string>(_operation));
+}
+template <class Op>
+auto communicator::iallreduce(const char *_value, std::string &_bucket, Op _operation) -> std::unique_ptr<iallreduce_request<std::string>>
+{
+    return iallreduce(_value, _bucket, make_op<std::string>(_operation));
+}
+template <class Op>
+auto communicator::iallreduce(const std::string &_value, std::string &_bucket, Op _operation) -> std::unique_ptr<iallreduce_request<std::string>>
+{
+    return iallreduce(_value, _bucket, make_op<std::string>(_operation));
+}
+template <class T, class Op>
+auto communicator::iallreduce(const T &_value, Op _operation) -> std::unique_ptr<iallreduce_reply<T>>
+{
+    return iallreduce(_value, make_op<T>(_operation));
+}
+template <class T, class Op>
+auto communicator::iallreduce(const std::vector<T> &_value, Op _operation) -> std::unique_ptr<iallreduce_reply<std::vector<T>>>
+{
+    return iallreduce(_value, make_op<T>(_operation));
+}
+template <class Op>
+auto communicator::iallreduce(const char _value, Op _operation) -> std::unique_ptr<iallreduce_reply<std::string>>
+{
+    return iallreduce(_value, make_op<std::string>(_operation));
+}
+template <class Op>
+auto communicator::iallreduce(const char *_value, Op _operation) -> std::unique_ptr<iallreduce_reply<std::string>>
+{
+    return iallreduce(_value, make_op<std::string>(_operation));
+}
+template <class Op>
+auto communicator::iallreduce(const std::string &_value, Op _operation) -> std::unique_ptr<iallreduce_reply<std::string>>
+{
+    return iallreduce(_value, make_op<std::string>(_operation));
+}
 #pragma endregion
 #pragma region operation wrapper
 template <class T, class Op>
@@ -756,9 +893,9 @@ op_proxy<T, Op>::~op_proxy()
 }
 
 template <class T, class Op>
-auto make_op(Op _func, const bool _commute) -> std::unique_ptr<op>
+auto make_op(Op _func, const bool _commute) -> std::shared_ptr<op>
 {
-    return std::make_unique<op_proxy<T, Op>>(_commute);
+    return std::make_shared<op_proxy<T, Op>>(_commute);
 }
 #pragma endregion
 #pragma region request implementations
@@ -873,6 +1010,40 @@ ialltoall_reply<T>::ialltoall_reply(MPI_Comm _comm, const T &_value, const size_
 }
 template <class T>
 auto ialltoall_reply<T>::get() -> T
+{
+    this->wait();
+    return _bucket;
+}
+
+template <class T>
+ireduce_request<T>::ireduce_request(int _dest, MPI_Comm _comm, const T &_value, T &_bucket, std::shared_ptr<op> _operation) : request(_comm), _operation(_operation), _dest(_dest), _value(_value), _bucket(_bucket)
+{
+    ireduce_impl(this->_dest, this->_comm, &this->_request, this->_value, this->_bucket, this->_operation.get());
+}
+template <class T>
+ireduce_reply<T>::ireduce_reply(int _dest, MPI_Comm _comm, const T &_value, std::shared_ptr<op> _operation) : request(_comm), _operation(_operation), _dest(_dest), _value(_value), _bucket(T{})
+{
+    ireduce_impl(this->_dest, this->_comm, &this->_request, this->_value, this->_bucket, this->_operation.get());
+}
+template <class T>
+auto ireduce_reply<T>::get() -> T
+{
+    this->wait();
+    return _bucket;
+}
+
+template <class T>
+iallreduce_request<T>::iallreduce_request(MPI_Comm _comm, const T &_value, T &_bucket, std::shared_ptr<op> _operation) : request(_comm), _operation(_operation), _value(_value), _bucket(_bucket)
+{
+    iallreduce_impl(this->_comm, &this->_request, this->_value, this->_bucket, this->_operation.get());
+}
+template <class T>
+iallreduce_reply<T>::iallreduce_reply(MPI_Comm _comm, const T &_value, std::shared_ptr<op> _operation) : request(_comm), _operation(_operation), _value(_value), _bucket(T{})
+{
+    iallreduce_impl(this->_comm, &this->_request, this->_value, this->_bucket, this->_operation.get());
+}
+template <class T>
+auto iallreduce_reply<T>::get() -> T
 {
     this->wait();
     return _bucket;
@@ -1236,6 +1407,78 @@ template <class Op>
 auto sender::reduce(const std::string &_value, Op _operation) -> std::string
 {
     return reduce(_value, make_op<std::string>(_operation).get());
+}
+
+template <class T>
+auto sender::ireduce(const T &_value, T &_bucket, std::shared_ptr<op> _operation) -> std::unique_ptr<ireduce_request<T>>
+{
+    return std::make_unique<ireduce_request<T>>(_dest, _comm, _value, _bucket, _operation);
+}
+template <class T>
+auto sender::ireduce(const std::vector<T> &_value, std::vector<T> &_bucket, std::shared_ptr<op> _operation) -> std::unique_ptr<ireduce_request<std::vector<T>>>
+{
+    return std::make_unique<ireduce_request<std::vector<T>>>(_dest, _comm, _value, _bucket, _operation);
+}
+template <class T>
+auto sender::ireduce(const T &_value, std::shared_ptr<op> _operation) -> std::unique_ptr<ireduce_reply<T>>
+{
+    return std::make_unique<ireduce_reply<T>>(_dest, _comm, _value, _operation);
+}
+template <class T>
+auto sender::ireduce(const std::vector<T> &_value, std::shared_ptr<op> _operation) -> std::unique_ptr<ireduce_reply<std::vector<T>>>
+{
+    return std::make_unique<ireduce_reply<std::vector<T>>>(_dest, _comm, _value, _operation);
+}
+
+template <class T, class Op>
+auto sender::ireduce(const T &_value, T &_bucket, Op _operation) -> std::unique_ptr<ireduce_request<T>>
+{
+    return ireduce(_value, _bucket, make_op<T>(_operation));
+}
+template <class T, class Op>
+auto sender::ireduce(const std::vector<T> &_value, std::vector<T> &_bucket, Op _operation) -> std::unique_ptr<ireduce_request<std::vector<T>>>
+{
+    return ireduce(_value, _bucket, make_op<T>(_operation));
+}
+template <class Op>
+auto sender::ireduce(const char _value, std::string &_bucket, Op _operation) -> std::unique_ptr<ireduce_request<std::string>>
+{
+    return ireduce(_value, _bucket, make_op<std::string>(_operation));
+}
+template <class Op>
+auto sender::ireduce(const char *_value, std::string &_bucket, Op _operation) -> std::unique_ptr<ireduce_request<std::string>>
+{
+    return ireduce(_value, _bucket, make_op<std::string>(_operation));
+}
+template <class Op>
+auto sender::ireduce(const std::string &_value, std::string &_bucket, Op _operation) -> std::unique_ptr<ireduce_request<std::string>>
+{
+    return ireduce(_value, _bucket, make_op<std::string>(_operation));
+}
+template <class T, class Op>
+auto sender::ireduce(const T &_value, Op _operation) -> std::unique_ptr<ireduce_reply<T>>
+{
+    return ireduce(_value, make_op<T>(_operation));
+}
+template <class T, class Op>
+auto sender::ireduce(const std::vector<T> &_value, Op _operation) -> std::unique_ptr<ireduce_reply<std::vector<T>>>
+{
+    return ireduce(_value, make_op<T>(_operation));
+}
+template <class Op>
+auto sender::ireduce(const char _value, Op _operation) -> std::unique_ptr<ireduce_reply<std::string>>
+{
+    return ireduce(_value, make_op<std::string>(_operation));
+}
+template <class Op>
+auto sender::ireduce(const char *_value, Op _operation) -> std::unique_ptr<ireduce_reply<std::string>>
+{
+    return ireduce(_value, make_op<std::string>(_operation));
+}
+template <class Op>
+auto sender::ireduce(const std::string &_value, Op _operation) -> std::unique_ptr<ireduce_reply<std::string>>
+{
+    return ireduce(_value, make_op<std::string>(_operation));
 }
 #pragma endregion
 } // namespace mpi
