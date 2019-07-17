@@ -886,6 +886,53 @@ auto waitsome(std::unique_ptr<T> &... _values) -> std::vector<size_t>;
 template <class... T>
 auto waitsome(T *... _values) -> std::vector<size_t>;
 #pragma endregion
+#pragma region sender_receiver
+class sender_receiver
+{
+private:
+    int _dest;
+    int _source;
+    int _sendtag;
+    int _recvtag;
+    MPI_Comm _comm;
+    MPI_Status _status;
+
+public:
+    sender_receiver(int _dest, int _source, int _sendtag, int _recvtag, MPI_Comm _comm);
+
+    auto operator==(const sender_receiver &rhs) -> bool;
+    auto operator!=(const sender_receiver &rhs) -> bool;
+
+#pragma region sendrecv
+    template <class T, class U>
+    auto sendrecv(const U &_value, T &_bucket) -> void;
+    template <class T, class U>
+    auto sendrecv(const std::vector<U> &_value, T &_bucket) -> void;
+    template <class T>
+    auto sendrecv(const char _value, T &_bucket) -> void;
+    template <class T>
+    auto sendrecv(const char *_value, T &_bucket) -> void;
+    template <class T>
+    auto sendrecv(const std::string &_value, T &_bucket) -> void;
+
+    template <class T, class U>
+    auto sendrecv(const U &_value) -> T;
+    template <class T, class U>
+    auto sendrecv(const std::vector<U> &_value) -> T;
+    template <class T>
+    auto sendrecv(const char _value) -> T;
+    template <class T>
+    auto sendrecv(const char *_value) -> T;
+    template <class T>
+    auto sendrecv(const std::string &_value) -> T;
+#pragma endregion
+#pragma region sendrecv_replace
+    template <class T>
+    auto sendrecv_replace(T &_value) -> void;
+    auto sendrecv_replace(std::string &_value) -> void;
+#pragma endregion
+};
+#pragma endregion
 #pragma region receiver
 class receiver
 {
@@ -900,6 +947,8 @@ public:
 
     auto operator==(const receiver &rhs) -> bool;
     auto operator!=(const receiver &rhs) -> bool;
+
+    auto dest(int _dest) -> std::unique_ptr<sender_receiver>;
 
 #pragma region recv
     template <class T>
@@ -976,6 +1025,8 @@ public:
 
     auto operator==(const sender &rhs) -> bool;
     auto operator!=(const sender &rhs) -> bool;
+
+    auto source(int _source) -> std::unique_ptr<sender_receiver>;
 
 #pragma region send
     template <class T>

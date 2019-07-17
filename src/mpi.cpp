@@ -274,6 +274,23 @@ auto rsend_impl(int _dest, int _tag, MPI_Comm _comm, const std::string &_value) 
     MPI_Rsend(_value.c_str(), _value.size(), MPI_CHAR, _dest, _tag, _comm);
 }
 #pragma endregion
+#pragma region send and receive
+auto sendrecv_impl(int _dest, int _source, int _sendtag, int _recvtag, MPI_Comm _comm, MPI_Status *_status, const std::string &_value, std::string &_bucket) -> void
+{
+    paranoidly_assert((initialized()));
+    paranoidly_assert((!finalized()));
+    //we need to find the proper size of the incoming data
+    auto _sendsize = static_cast<int>(_value.size());
+    auto _recvsize = int{};
+    MPI_Sendrecv(&_sendsize, 1, type_wrapper<int>{}, _dest, _sendtag, &_recvsize, 1, type_wrapper<int>{}, _source, _recvtag, _comm, _status);
+    //we need to allocate some memory for it
+    auto _c_str = std::make_unique<char[]>(_recvsize + 1);
+    //send and receive
+    MPI_Sendrecv(_value.c_str(), _sendsize + 1, MPI_CHAR, _dest, _sendtag, _c_str.get(), _recvsize + 1, MPI_CHAR, _source, _recvtag, _comm, _status);
+    //we need to write the value back
+    _bucket = std::string{_c_str.get()};
+}
+#pragma endregion
 
 #pragma region nonblocking allgather
 auto iallgather_impl(MPI_Comm _comm, MPI_Request *_request, const std::string &_value, std::unique_ptr<char[]> &_bucket) -> void
@@ -1184,6 +1201,25 @@ auto waitsome(const std::vector<std::unique_ptr<request>> &_values) -> std::vect
     return waitsome(_temp);
 }
 #pragma endregion
+#pragma region sender_receiver
+sender_receiver::sender_receiver(int _dest, int _source, int _sendtag, int _recvtag, MPI_Comm _comm) : _dest(_dest), _source(_source), _sendtag(_sendtag), _recvtag(_recvtag), _comm(_comm)
+{
+}
+
+auto sender_receiver::operator==(const sender_receiver &rhs) -> bool
+{
+    return _dest == rhs._dest && _source == rhs._source && _sendtag == rhs._sendtag && _recvtag == rhs._recvtag && _comm == rhs._comm;
+}
+auto sender_receiver::operator!=(const sender_receiver &rhs) -> bool
+{
+    return !(*this == rhs);
+}
+
+auto sender_receiver::sendrecv_replace(std::string &_value) -> void
+{
+    _value = sendrecv<std::string>(_value);
+}
+#pragma endregion
 #pragma region receiver
 receiver::receiver(int _source, int _tag, MPI_Comm _comm) : _source(_source), _tag(_tag), _comm(_comm)
 {
@@ -1196,6 +1232,13 @@ auto receiver::operator==(const receiver &rhs) -> bool
 auto receiver::operator!=(const receiver &rhs) -> bool
 {
     return !(*this == rhs);
+}
+
+auto receiver::dest(int _dest) -> std::unique_ptr<sender_receiver>
+{
+    auto _sendtag = 0;
+    auto _recvtag = 0;
+    return std::make_unique<sender_receiver>(_dest, _source, _sendtag, _recvtag, _comm);
 }
 
 auto receiver::scatter(const char *_value, std::string &_bucket, const size_t _chunk_size) -> void
@@ -1245,6 +1288,13 @@ auto sender::operator==(const sender &rhs) -> bool
 auto sender::operator!=(const sender &rhs) -> bool
 {
     return !(*this == rhs);
+}
+
+auto sender::source(int _source) -> std::unique_ptr<sender_receiver>
+{
+    auto _sendtag = 0;
+    auto _recvtag = 0;
+    return std::make_unique<sender_receiver>(_dest, _source, _sendtag, _recvtag, _comm);
 }
 
 auto sender::send(const char _value) -> void

@@ -359,6 +359,127 @@ auto rsend_impl(int _dest, int _tag, MPI_Comm _comm, const std::vector<T> &_valu
     MPI_Rsend(_value.data(), _value.size(), type_wrapper<T>{}, _dest, _tag, _comm);
 }
 #pragma endregion
+#pragma region send and receive
+//declarations
+auto sendrecv_impl(int _dest, int _source, int _sendtag, int _recvtag, MPI_Comm _comm, MPI_Status *_status, const std::string &_value, std::string &_bucket) -> void;
+//templates
+template <class T, class U>
+auto sendrecv_impl(int _dest, int _source, int _sendtag, int _recvtag, MPI_Comm _comm, MPI_Status *_status, const U &_value, T &_bucket) -> void
+{
+    paranoidly_assert((initialized()));
+    paranoidly_assert((!finalized()));
+    //we need to find the proper size of the incoming data
+    auto _sendsize = 1;
+    auto _recvsize = int{};
+    MPI_Sendrecv(&_sendsize, 1, type_wrapper<int>{}, _dest, _sendtag, &_recvsize, 1, type_wrapper<int>{}, _source, _recvtag, _comm, _status);
+    //check size
+    assert((1 == _recvsize));
+    //send and receive
+    MPI_Sendrecv(&_value, _sendsize, type_wrapper<U>{}, _dest, _sendtag, &_bucket, _recvsize, type_wrapper<T>{}, _source, _recvtag, _comm, _status);
+}
+template <class T, class U>
+auto sendrecv_impl(int _dest, int _source, int _sendtag, int _recvtag, MPI_Comm _comm, MPI_Status *_status, const U &_value, std::vector<T> &_bucket) -> void
+{
+    paranoidly_assert((initialized()));
+    paranoidly_assert((!finalized()));
+    //we need to find the proper size of the incoming data
+    auto _sendsize = 1;
+    auto _recvsize = int{};
+    MPI_Sendrecv(&_sendsize, 1, type_wrapper<int>{}, _dest, _sendtag, &_recvsize, 1, type_wrapper<int>{}, _source, _recvtag, _comm, _status);
+    //we need to allocate some memory for it
+    _bucket.resize(_recvsize);
+    //send and receive
+    MPI_Sendrecv(&_value, _sendsize, type_wrapper<U>{}, _dest, _sendtag, _bucket.data(), _recvsize, type_wrapper<T>{}, _source, _recvtag, _comm, _status);
+}
+template <class U>
+auto sendrecv_impl(int _dest, int _source, int _sendtag, int _recvtag, MPI_Comm _comm, MPI_Status *_status, const U &_value, std::string &_bucket) -> void
+{
+    paranoidly_assert((initialized()));
+    paranoidly_assert((!finalized()));
+    //we need to find the proper size of the incoming data
+    auto _sendsize = 1;
+    auto _recvsize = int{};
+    MPI_Sendrecv(&_sendsize, 1, type_wrapper<int>{}, _dest, _sendtag, &_recvsize, 1, type_wrapper<int>{}, _source, _recvtag, _comm, _status);
+    //we need to allocate some memory for it
+    auto _c_str = std::make_unique<char[]>(_recvsize + 1);
+    //send and receive
+    MPI_Sendrecv(&_value, _sendsize, type_wrapper<U>{}, _dest, _sendtag, _c_str.get(), _recvsize + 1, MPI_CHAR, _source, _recvtag, _comm, _status);
+    //we need to write the value back
+    _bucket = std::string{_c_str.get()};
+}
+template <class T, class U>
+auto sendrecv_impl(int _dest, int _source, int _sendtag, int _recvtag, MPI_Comm _comm, MPI_Status *_status, const std::vector<U> &_value, T &_bucket) -> void
+{
+    paranoidly_assert((initialized()));
+    paranoidly_assert((!finalized()));
+    //we need to find the proper size of the incoming data
+    auto _sendsize = static_cast<int>(_value.size());
+    auto _recvsize = int{};
+    MPI_Sendrecv(&_sendsize, 1, type_wrapper<int>{}, _dest, _sendtag, &_recvsize, 1, type_wrapper<int>{}, _source, _recvtag, _comm, _status);
+    //check size
+    assert((1 == _recvsize));
+    //send and receive
+    MPI_Sendrecv(_value.data(), _sendsize, type_wrapper<U>{}, _dest, _sendtag, &_bucket, _recvsize, type_wrapper<T>{}, _source, _recvtag, _comm, _status);
+}
+template <class T, class U>
+auto sendrecv_impl(int _dest, int _source, int _sendtag, int _recvtag, MPI_Comm _comm, MPI_Status *_status, const std::vector<U> &_value, std::vector<T> &_bucket) -> void
+{
+    paranoidly_assert((initialized()));
+    paranoidly_assert((!finalized()));
+    //we need to find the proper size of the incoming data
+    auto _sendsize = static_cast<int>(_value.size());
+    auto _recvsize = int{};
+    MPI_Sendrecv(&_sendsize, 1, type_wrapper<int>{}, _dest, _sendtag, &_recvsize, 1, type_wrapper<int>{}, _source, _recvtag, _comm, _status);
+    //we need to allocate some memory for it
+    _bucket.resize(_recvsize);
+    //we need to receive it
+    MPI_Sendrecv(_value.data(), _sendsize, type_wrapper<U>{}, _dest, _sendtag, _bucket.data(), _recvsize, type_wrapper<T>{}, _source, _recvtag, _comm, _status);
+}
+template <class U>
+auto sendrecv_impl(int _dest, int _source, int _sendtag, int _recvtag, MPI_Comm _comm, MPI_Status *_status, const std::vector<U> &_value, std::string &_bucket) -> void
+{
+    paranoidly_assert((initialized()));
+    paranoidly_assert((!finalized()));
+    //we need to find the proper size of the incoming data
+    auto _sendsize = static_cast<int>(_value.size());
+    auto _recvsize = int{};
+    MPI_Sendrecv(&_sendsize, 1, type_wrapper<int>{}, _dest, _sendtag, &_recvsize, 1, type_wrapper<int>{}, _source, _recvtag, _comm, _status);
+    //we need to allocate some memory for it
+    auto _c_str = std::make_unique<char[]>(_recvsize + 1);
+    //send and receive
+    MPI_Sendrecv(_value.data(), _sendsize, type_wrapper<U>{}, _dest, _sendtag, _c_str.get(), _recvsize + 1, MPI_CHAR, _source, _recvtag, _comm, _status);
+    //we need to write the value back
+    _bucket = std::string{_c_str.get()};
+}
+template <class T>
+auto sendrecv_impl(int _dest, int _source, int _sendtag, int _recvtag, MPI_Comm _comm, MPI_Status *_status, const std::string &_value, T &_bucket) -> void
+{
+    paranoidly_assert((initialized()));
+    paranoidly_assert((!finalized()));
+    //we need to find the proper size of the incoming data
+    auto _sendsize = static_cast<int>(_value.size());
+    auto _recvsize = int{};
+    MPI_Sendrecv(&_sendsize, 1, type_wrapper<int>{}, _dest, _sendtag, &_recvsize, 1, type_wrapper<int>{}, _source, _recvtag, _comm, _status);
+    //check size
+    assert((1 == _recvsize));
+    //send and receive
+    MPI_Sendrecv(_value.c_str(), _sendsize + 1, MPI_CHAR, _dest, _sendtag, &_bucket, _recvsize, type_wrapper<T>{}, _source, _recvtag, _comm, _status);
+}
+template <class T>
+auto sendrecv_impl(int _dest, int _source, int _sendtag, int _recvtag, MPI_Comm _comm, MPI_Status *_status, const std::string &_value, std::vector<T> &_bucket) -> void
+{
+    paranoidly_assert((initialized()));
+    paranoidly_assert((!finalized()));
+    //we need to find the proper size of the incoming data
+    auto _sendsize = static_cast<int>(_value.size());
+    auto _recvsize = int{};
+    MPI_Sendrecv(&_sendsize, 1, type_wrapper<int>{}, _dest, _sendtag, &_recvsize, 1, type_wrapper<int>{}, _source, _recvtag, _comm, _status);
+    //we need to allocate some memory for it
+    _bucket.resize(_recvsize);
+    //send and receive
+    MPI_Sendrecv(_value.c_str(), _sendsize + 1, MPI_CHAR, _dest, _sendtag, &_bucket, _recvsize, type_wrapper<T>{}, _source, _recvtag, _comm, _status);
+}
+#pragma endregion
 
 #pragma region nonblocking allgather
 //declarations
@@ -1111,6 +1232,71 @@ template <class... T>
 auto waitsome(T *... _values) -> std::vector<size_t>
 {
     return waitsome(std::vector<request *>{_values...});
+}
+#pragma endregion
+#pragma region sender_receiver
+template <class T, class U>
+auto sender_receiver::sendrecv(const U &_value, T &_bucket) -> void
+{
+    return sendrecv_impl(_dest, _source, _sendtag, _recvtag, _comm, &_status, _value, _bucket);
+}
+template <class T, class U>
+auto sender_receiver::sendrecv(const std::vector<U> &_value, T &_bucket) -> void
+{
+    return sendrecv_impl(_dest, _source, _sendtag, _recvtag, _comm, &_status, _value, _bucket);
+}
+template <class T>
+auto sender_receiver::sendrecv(const char _value, T &_bucket) -> void
+{
+    return sendrecv(std::string{_value}, _bucket);
+}
+template <class T>
+auto sender_receiver::sendrecv(const char *_value, T &_bucket) -> void
+{
+    return sendrecv(std::string{_value}, _bucket);
+}
+template <class T>
+auto sender_receiver::sendrecv(const std::string &_value, T &_bucket) -> void
+{
+    return sendrecv_impl(_dest, _source, _sendtag, _recvtag, _comm, &_status, _value, _bucket);
+}
+
+template <class T, class U>
+auto sender_receiver::sendrecv(const U &_value) -> T
+{
+    auto _bucket = T{};
+    sendrecv(_value, _bucket);
+    return _bucket;
+}
+template <class T, class U>
+auto sender_receiver::sendrecv(const std::vector<U> &_value) -> T
+{
+    auto _bucket = T{};
+    sendrecv(_value, _bucket);
+    return _bucket;
+}
+template <class T>
+auto sender_receiver::sendrecv(const char _value) -> T
+{
+    return sendrecv<T>(std::string{_value});
+}
+template <class T>
+auto sender_receiver::sendrecv(const char *_value) -> T
+{
+    return sendrecv<T>(std::string{_value});
+}
+template <class T>
+auto sender_receiver::sendrecv(const std::string &_value) -> T
+{
+    auto _bucket = T{};
+    sendrecv<T>(_value, _bucket);
+    return _bucket;
+}
+
+template <class T>
+auto sender_receiver::sendrecv_replace(T &_value) -> void
+{
+    _value = sendrecv<T>(_value);
 }
 #pragma endregion
 #pragma region receiver
